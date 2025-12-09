@@ -10,28 +10,41 @@ const mapMeshSettings = {
   "init_view": [35.658577, 139.745451],
   "init_zoom": 7,
   "mesh_fillColor_selected": "#ff0000",
+  "mesh_fillColor_partlySelected": "#ff7700",
   "mesh_fillColor_default": "#ffffff",
   "mesh_gridLineColor": "#ff0000",
 }
 
 // calculation ratios for japanese meshes
-const meshSize_calculation_ratios = {
+const meshSizeData = {
   1: {
-    "lat": 40 / 60,
-    "lon": 1
+    "defaultZoom": 9, // メッシュコードからメッシュサイズを取得 //called from zoomToMesh
+    "zoomThresholds": [6, 0], // threshold for line sizes
+    "ratio": {
+      "lat": 40 / 60,
+      "lon": 1
+    }
   },
   2: {
-    "lat": 5 / 60,
-    "lon": 7.5 / 60
+    "defaultZoom": 12,
+    "zoomThresholds": [9, 7],
+    "ratio": {
+      "lat": 5 / 60,
+      "lon": 7.5 / 60
+    }
   },
   3: {
-    "lat": 30 / 60 / 60,
-    "lon": 45 / 60 / 60
+    "defaultZoom": 14,
+    "zoomThresholds": [12, 10],
+    "ratio": {
+      "lat": 30 / 60 / 60,
+      "lon": 45 / 60 / 60
+    }
   }
 };
 
 // polygon boundaries - do not generate outside of japan
-const mesh_generation_boundaries = {
+const latlon_boundaries = {
   "lat": {
     "min": 23,  // Bottom boundary
     "max": 47   // Top boundary
@@ -42,19 +55,6 @@ const mesh_generation_boundaries = {
   }
 }
 
-// constant for line sizes: usage lineWeightThresholdForMeshZoomSize[{meshSize}]
-const zoomSizeThresholds_perMeshSize_forLineWeight = {
-  1: [6, 0],
-  2: [9, 7],
-  3: [12, 10],
-}
-
-// メッシュコードからメッシュサイズを取得 //called from zoomToMesh
-const meshSizeDefaultZoom = {
-  1: 9,
-  2: 12,
-  3: 14
-}
 
 //////////////////////////////////
 // Global Variables
@@ -83,6 +83,7 @@ function initMapGenerator(
     _init_zoom,
     
     _mesh_fillColor_selected,
+    _mesh_fillColor_partlySelected,
     _mesh_fillColor_default,
     _mesh_gridLineColor,
 
@@ -94,6 +95,7 @@ function initMapGenerator(
   mapMeshSettings.init_zoom = _init_zoom
   
   mapMeshSettings.mesh_fillColor_selected = _mesh_fillColor_selected;
+  mapMeshSettings.mesh_fillColor_partlySelected = _mesh_fillColor_partlySelected;
   mapMeshSettings.mesh_fillColor_default = _mesh_fillColor_default;
   mapMeshSettings.mesh_gridLineColor = _mesh_gridLineColor;
 
@@ -151,8 +153,8 @@ function updateMapMeshes() {
   const [minMeshMinLat, minMeshMinLon] = getMeshMinLatlon(minMeshArray);
 
   // メッシュの一辺の緯度経度サイズ配列取得
-  const meshLatUnit = meshSize_calculation_ratios[meshSize]["lat"];
-  const meshLonUnit = meshSize_calculation_ratios[meshSize]["lon"];
+  const meshLatUnit = meshSizeData[meshSize].ratio.lat;
+  const meshLonUnit = meshSizeData[meshSize].ratio.lon;
 
   // 西端から東端までループ
   let lonCounter = 0;
@@ -194,10 +196,10 @@ function updateMapMeshes() {
       meshPolygon._meshCode = currMeshCode; // Store meshcode on itself
 
       // 選択したメッシュの行番号を取得
-      const isSelected = isMeshCodeSelected(currMeshCode);
+      const selectedCode = isMeshCodeSelected(currMeshCode);
 
       // スタイル設定
-      setMeshStyle(meshPolygon, meshSize, isSelected);
+      setMeshStyle(meshPolygon, meshSize, selectedCode);
 
 
       // テキスト表示設定
@@ -228,8 +230,8 @@ function updateMapMeshes() {
 
         // スタイル設定 // Check selection and set meshStyle for all polygons
         meshLayer.eachLayer(meshPolygon => {
-          const isSelected = isMeshCodeSelected(meshPolygon._meshCode);
-          setMeshStyle(meshPolygon, meshSize, isSelected);
+          const selectedCode = isMeshCodeSelected(meshPolygon._meshCode);
+          setMeshStyle(meshPolygon, meshSize, selectedCode);
         });
       });
       // メッシュをメッシュグループに追加
@@ -254,10 +256,10 @@ function zoomToMesh(meshCode) {
   // メッシュの左下緯度経度を取得
   const [minLat, minLon] = getMeshMinLatlon(meshArray);
   // メッシュサイズに応じて、中心地点を算出
-  const centerLat = minLat + (meshSize_calculation_ratios[meshSize]["lat"] / 2);
-  const centerLon = minLon + (meshSize_calculation_ratios[meshSize]["lon"] / 2);
+  const centerLat = minLat + (meshSizeData[meshSize].ratio.lat / 2);
+  const centerLon = minLon + (meshSizeData[meshSize].ratio.lon / 2);
   // 対象メッシュを表示
-  const zoomSize = meshSizeDefaultZoom[meshSize];
+  const zoomSize = meshSizeData[meshSize].defaultZoom;
   map.setView([centerLat, centerLon], zoomSize);
 }
 
@@ -380,8 +382,8 @@ function getMeshMinLatlon(meshArray) {
     const latCode = meshArray[i];
     const lonCode = meshArray[i + 1];
 
-    minLat += latCode * meshSize_calculation_ratios[meshLevel]["lat"];
-    minLon += lonCode * meshSize_calculation_ratios[meshLevel]["lon"];
+    minLat += latCode * meshSizeData[meshLevel].ratio.lat;
+    minLon += lonCode * meshSizeData[meshLevel].ratio.lon;
   }
   return [minLat, minLon];
 }
@@ -389,8 +391,8 @@ function getMeshMinLatlon(meshArray) {
 // 日本のメッシュチェック
 function checkLatlonInside(minLat, minLon, maxLat, maxLon) {
   if (
-    mesh_generation_boundaries["lat"]["min"] <= minLat && maxLat <= mesh_generation_boundaries["lat"]["max"] &&
-    mesh_generation_boundaries["lon"]["min"] <= minLon && maxLon <= mesh_generation_boundaries["lon"]["max"]
+    latlon_boundaries["lat"]["min"] <= minLat && maxLat <= latlon_boundaries["lat"]["max"] &&
+    latlon_boundaries["lon"]["min"] <= minLon && maxLon <= latlon_boundaries["lon"]["max"]
   ) {
     return true;
   } else {
@@ -402,24 +404,28 @@ function checkLatlonInside(minLat, minLon, maxLat, maxLon) {
 // スタイル設定関数 - style and visibility
 //--------------------------------
 // メッシュスタイル設定
-function setMeshStyle(meshPolygon, meshSize, selectedFlg) {
+function setMeshStyle(meshPolygon, meshSize, selectedCode) {
   const zoomSize = map.getZoom();
   let lineWeight = 2
-  if (zoomSize < zoomSizeThresholds_perMeshSize_forLineWeight[meshSize][1]){
+  if (zoomSize < meshSizeData[meshSize].zoomThresholds[1]){
     lineWeight = 0
   }
-  else if (zoomSize < zoomSizeThresholds_perMeshSize_forLineWeight[meshSize][0]){
+  else if (zoomSize < meshSizeData[meshSize].zoomThresholds[0]){
     lineWeight = 1
   }
 
   let meshFillColor;
-  switch (selectedFlg) {
-    case true:
-      meshFillColor = mapMeshSettings.mesh_fillColor_selected;
-      break;
-    case false:
+  switch (selectedCode) {
+    case 0: // not selected
       meshFillColor = mapMeshSettings.mesh_fillColor_default;
       break;
+    case 1: // selected
+      meshFillColor = mapMeshSettings.mesh_fillColor_selected;
+      break;
+    case 2: //partly selected
+      meshFillColor = mapMeshSettings.mesh_fillColor_partlySelected;
+      break;
+      
   }
   meshPolygon.setStyle({
     color: mapMeshSettings.mesh_gridLineColor, // gird line color
@@ -455,10 +461,10 @@ function setMeshTextVisiblity() {
 function setMouseOverOutStyle(layer, meshSize, isOver) {
   const zoomSize = map.getZoom();
   let lineWeight = isOver? 4: 2;
-  if (zoomSize < zoomSizeThresholds_perMeshSize_forLineWeight[meshSize][1]){
+  if (zoomSize < meshSizeData[meshSize].zoomThresholds[1]){
     lineWeight = isOver? 1: 0;
   }
-  else if (zoomSize < zoomSizeThresholds_perMeshSize_forLineWeight[meshSize][0]){
+  else if (zoomSize < meshSizeData[meshSize].zoomThresholds[0]){
     lineWeight = isOver? 2: 1;
 
   }

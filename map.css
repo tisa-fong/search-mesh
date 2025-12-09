@@ -29,6 +29,7 @@ input[type="button"] {
   font-size: 18px;
 }
 .button_wrapper {
+  display: flex; 
   box-sizing: border-box;
   height: auto;
   width: 100%;
@@ -46,8 +47,8 @@ input[type="button"] {
   width: 350px;
   background-color: #ffffff;
 }
-#latlng_input {
-  box-sizing: border-box;
+.latlng_input {
+  flex: 1;  
   float: left;
   height: 20px;
   width: 100%;
