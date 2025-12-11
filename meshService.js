@@ -39,10 +39,11 @@ function checkMeshCode(meshArrayList) {
     }
     // メッシュコードが範囲内かどうかチェック
     const tmpMeshInt = Number(meshArrayList[i]);
-    const tgtMeshSize = Math.floor(n / 2) + 1;
+    const tgtMeshSize = Math.floor(i / 2) + 1;
+    const latlon = i % 2 == 0? "lat": "lon"
     if (
-      !(tmpMeshInt >= consts.MESH_DATA[tgtMeshSize].boundary.lat &&
-        tmpMeshInt <= consts.MESH_DATA[tgtMeshSize].boundary.lon)
+      !(tmpMeshInt >= consts.MESH_DATA[tgtMeshSize].boundary[latlon][0] &&
+        tmpMeshInt <= consts.MESH_DATA[tgtMeshSize].boundary[latlon][1])
     ) {
       return false;
     }
