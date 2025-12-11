@@ -558,6 +558,7 @@ const DOM_copyBtn = document.getElementById(consts.DOM_IDS.copyBtn);
 function initCookies(){
   const cookiesArray = document.cookie.split(";");
   for (let cookie of cookiesArray){
+    if (cookie.trim() == "") { continue; }
     cookie = cookie.trim().split("=")
     // console.log(`cookie[${cookie[0]}][${cookie[1]}]`)
     const key = cookie[0].trim()
