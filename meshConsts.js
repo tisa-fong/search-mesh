@@ -51,57 +51,57 @@ export const COOKIE_SETTINGS = {
 export const MESH_DATA = {
     MESH_ARRAY_LENGTH_LIST: [2, 2, 1, 1, 1, 1],
     BOUNDARIES: { // polygon boundaries - do not generate outside of japan
-        "lat": {
-            "min": 23,  // Bottom boundary
-            "max": 47   // Top boundary
+        lat: {
+            min: 23,  // Bottom boundary
+            max: 47   // Top boundary
         },
-        "lon": {
-            "min": 122, // Left boundary
-            "max": 147  // Right boundary
+        lon: {
+            min: 122, // Left boundary
+            max: 147  // Right boundary
         }
     },
     1: {
-        "level:": 1,
-        "defaultZoom": 9, // メッシュコードからメッシュサイズを取得 //called from zoomToMesh
-        "zoomThresholds": [6, 0], // threshold for line sizes
-        "ratio": { // calculation ratios for japanese meshes
-            "lat": 40 / 60,
-            "lon": 1
+        level: 1,
+        defaultZoom: 9, // メッシュコードからメッシュサイズを取得 //called from zoomToMesh
+        zoomThresholds: [6, 0], // threshold for line sizes
+        ratio: { // calculation ratios for japanese meshes
+            lat: 40 / 60,
+            lon: 1
         },
-        "boundary":{
-            "lat": [35, 69], //1次メッシュのLat Vertical
-            "lon": [22, 46]  //1次メッシュのLon Horizontal
+        boundary:{
+            lat: [35, 69], //1次メッシュのLat Vertical
+            lon: [22, 46]  //1次メッシュのLon Horizontal
         }
     },
     2: {
-        "level:": 2,
-        "defaultZoom": 12,
-        "zoomThresholds": [9, 7],
-        "ratio": {
-            "lat": 5 / 60,
-            "lon": 7.5 / 60
+        level: 2,
+        defaultZoom: 12,
+        zoomThresholds: [9, 7],
+        ratio: {
+            lat: 5 / 60,
+            lon: 7.5 / 60
         },
-        "boundary":{
-            "lat": [0, 7], //2次メッシュのVertical
-            "lon": [0, 7]  //2次メッシュのHorizontal
+        boundary:{
+            lat: [0, 7], //2次メッシュのVertical
+            lon: [0, 7]  //2次メッシュのHorizontal
         },
-        "partsLength": 8,
-        "maxParts": 64,
+        partsLength: 8,
+        maxParts: 64,
     },
     3: {
-        "level:": 3,
-        "defaultZoom": 14,
-        "zoomThresholds": [12, 10],
-        "ratio": {
-            "lat": 30 / 60 / 60,
-            "lon": 45 / 60 / 60
+        level: 3,
+        defaultZoom: 14,
+        zoomThresholds: [12, 10],
+        ratio: {
+            lat: 30 / 60 / 60,
+            lon: 45 / 60 / 60
         },
-        "boundary":{
-            "lat": [0, 9], //3次メッシュのVertical
-            "lon": [0, 9]  //3次メッシュのHorizontal
+        boundary:{
+            lat: [0, 9], //3次メッシュのVertical
+            lon: [0, 9]  //3次メッシュのHorizontal
         },
-        "partsLength": 10,
-        "maxParts": 100,
+        partsLength: 10,
+        maxParts: 100,
     }
 };
 export const MESH_DATA_FROM_LENGTH = {
@@ -111,7 +111,7 @@ export const MESH_DATA_FROM_LENGTH = {
 }
 
 export const SELECTCODE = {
-  "not_selected": 0,
-  "selected": 1,
-  "partially_selected": 2
+  not_selected: 0,
+  selected: 1,
+  partially_selected: 2
 }

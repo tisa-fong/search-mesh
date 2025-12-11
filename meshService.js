@@ -79,11 +79,13 @@ function updateLatLonCookie(latlonNum, targetLatlonDom){
 // 検索削除
 function clearLatLonSearch(latlonNum) {
   const tgtLatlonDom = getTargetLatlonDOM(latlonNum)
-  mapGenerator.removeLatLonMarker(); // マーカーがある場合、削除
+  mapGenerator.removeLatLonMarker(latlonNum); // マーカーがある場合、削除
 
   // Clear the text box
   tgtLatlonDom.value = "";
   updateLatLonCookie(latlonNum, tgtLatlonDom)
+
+  mapGenerator.updateMapMeshes()
 }
 
 function setLatLonSearch(latlonNum) {
@@ -104,8 +106,10 @@ function setLatLonSearch(latlonNum) {
     parseFloat(tgtLatLonArray[1]),
   ];
 
-  mapGenerator.setLatLonMarker(searchLatlngArray, consts.LATLON_SEARCHZOOM)
+  mapGenerator.setLatLonMarker(latlonNum, searchLatlngArray, consts.LATLON_SEARCHZOOM)
   updateLatLonCookie(latlonNum, tgtLatlonDom)
+
+  mapGenerator.updateMapMeshes()
 }
 
 
@@ -613,7 +617,7 @@ document.addEventListener("DOMContentLoaded", ()=> {
   DOM_clearMarkerBtn_1.addEventListener("click", ()=> clearLatLonSearch(1));
   DOM_zoomToPointBtn_1.addEventListener("click", ()=> setLatLonSearch(1));
   DOM_clearMarkerBtn_2.addEventListener("click", ()=> clearLatLonSearch(2));
-  DOM_zoomToPointBtn_2.addEventListener("click", ()=> test2());
+  DOM_zoomToPointBtn_2.addEventListener("click", ()=> setLatLonSearch(2));
   DOM_sortAscBtn      .addEventListener("click", ()=> sortTable("asc"));
   DOM_sortDescBtn     .addEventListener("click", ()=> sortTable("desc"));
   DOM_clearBtn        .addEventListener("click", ()=> clearTable());

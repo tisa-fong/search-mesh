@@ -10,7 +10,8 @@ const mapMeshSettings = {
   meshSize: 1,
   meshCache: {},
   textVisiblity: false, // メッシュのテキスト表示
-  searchMarker: null // 検索時のマーカーを準備
+  searchMarker_1: null, // 検索時のマーカーを準備
+  searchMarker_2: null, // 検索時のマーカーを準備
 }
 
 let map = null
@@ -54,15 +55,44 @@ function initMapGenerator(
 
   // 移動、ズームが終了時の処理 - update meshes on map zoom or move
   map.on("moveend", function (e) {
-    updateMapMeshes();
+    updateMap();
     updateMapPositionCookie(map.getCenter().lat, map.getCenter().lng, map.getZoom())
   });
 
-  updateMapMeshes();
+  updateMap();
 }
 
 // メッシュレイヤー表示
-function updateMapMeshes() {
+function updateMap() {
+  if ((mapMeshSettings.searchMarker_1 == null) || (mapMeshSettings.searchMarker_2 == null)){
+    updateMap_mesh()
+  } else {
+    updateMap_markers()
+  }
+}
+
+function updateMap_markers(){
+  meshLayer.clearLayers();
+  let minLat, maxLat, minLon, maxLon;
+  if (mapMeshSettings.searchMarker_2._latlng.lat > mapMeshSettings.searchMarker_2._latlng.lat){
+    minLat = mapMeshSettings.searchMarker_2._latlng.lat
+    maxLat = mapMeshSettings.searchMarker_1._latlng.lat
+  } else {
+    minLat = mapMeshSettings.searchMarker_1._latlng.lat
+    maxLat = mapMeshSettings.searchMarker_2._latlng.lat
+  }
+  if (mapMeshSettings.searchMarker_2._latlng.lng > mapMeshSettings.searchMarker_2._latlng.lng){
+    minLon = mapMeshSettings.searchMarker_2._latlng.lng
+    maxLon = mapMeshSettings.searchMarker_1._latlng.lng
+  } else {
+    minLon = mapMeshSettings.searchMarker_1._latlng.lng
+    maxLon = mapMeshSettings.searchMarker_2._latlng.lng
+  }
+
+  const meshPolygon = createMeshRect(minLat, minLon, maxLat, maxLon)
+  meshLayer.addLayer(meshPolygon)
+}
+function updateMap_mesh() {
   // 前回のメッシュ表示を削除
   meshLayer.clearLayers();
 
@@ -123,10 +153,7 @@ function updateMapMeshes() {
       }
 
       // メッシュポリゴン生成
-      const cellBounds = [[currMeshMinLat, currMeshMinLon], [currMeshMaxLat, currMeshMaxLon]];
-      const meshPolygon = L.rectangle(cellBounds, {
-        // renderer: canvasRenderer
-      });
+      const meshPolygon = createMeshRect(currMeshMinLat, currMeshMinLon, currMeshMaxLat, currMeshMaxLon)
       meshPolygon._meshCode = currMeshCode; // Store meshcode on itself
 
       // 選択したメッシュの行番号を取得
@@ -214,19 +241,21 @@ function convertMeshCode_to_meshArray(meshCode) {
 }
 
 // マーカーがある場合、削除
-function removeLatLonMarker() {
-  if (mapMeshSettings.searchMarker != null) {
-    map.removeLayer(mapMeshSettings.searchMarker);
-    mapMeshSettings.searchMarker == null;
+function removeLatLonMarker(markerNum) {
+  const marker = `searchMarker_${markerNum}`
+  if (mapMeshSettings[marker] != null) {
+    map.removeLayer(mapMeshSettings[marker]);
+    mapMeshSettings[marker] = null;
   }
 }
 
 // 検索
-function setLatLonMarker(searchLatlngArray, zoomSize) {
+function setLatLonMarker(markerNum, searchLatlngArray, zoomSize) {
+  const marker = `searchMarker_${markerNum}`
   // マーカーがある場合、削除
-  removeLatLonMarker();
+  removeLatLonMarker(markerNum);
   // 検索地点にマーカーを立てる
-  mapMeshSettings.searchMarker = new L.marker(searchLatlngArray).addTo(map);
+  mapMeshSettings[marker] = new L.marker(searchLatlngArray).addTo(map);
 
   // 検索地点を表示
   zoomToLatLon(searchLatlngArray[0], searchLatlngArray[1], zoomSize)
@@ -241,6 +270,13 @@ function setLatLonMarker(searchLatlngArray, zoomSize) {
 function zoomToLatLon(lat, lon, zoom){
   map.setView([lat, lon], zoom);
   updateMapPositionCookie(lat, lon, zoom)
+}
+
+function createMeshRect(currMeshMinLat, currMeshMinLon, currMeshMaxLat, currMeshMaxLon){
+  const cellBounds = [[currMeshMinLat, currMeshMinLon], [currMeshMaxLat, currMeshMaxLon]];
+  return L.rectangle(cellBounds, {
+    // renderer: canvasRenderer
+  });
 }
 
 //--------------------------------
@@ -439,7 +475,7 @@ function setMeshText(meshPolygon, mouseOnFlg) {
 //////////////////////////////////
 export { 
   initMapGenerator, 
-  updateMapMeshes, 
+  updateMap as updateMapMeshes, 
   zoomToMesh, 
   convertMeshCode_to_meshArray, 
   removeLatLonMarker, 
