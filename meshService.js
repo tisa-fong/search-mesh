@@ -1,65 +1,9 @@
-import { initMapGenerator, updateMapMeshes, zoomToMesh, convertMeshCode_to_meshArray, removeLatLonMarker, zoomToLatLonMarker } from "./meshGenerator.js";
-
-//////////////////////////////////
-// Constants
-//////////////////////////////////
-const map_dom_id = "map_area"
-const starting_coordinates = [35.658577, 139.745451]
-const starting_zoom = 7
-const latLonSearchZoom = 14
-
-const DOM_userSelected_meshSize = document.getElementById("select_meshlevel");
-const DOM_latlon_input = document.getElementById("latlng_input_1");
-const DOM_clearMarkerBtn = document.getElementById("clearMarkerBtn_1");
-const DOM_zoomToPointBtn = document.getElementById("zoomToPointBtn_1");
-const DOM_userSelected_meshTable = document.getElementById("list_table");
-const DOM_meshTable_selectedMeshCounter = document.getElementById("selected_mesh_count");
-const DOM_userSelected_meshTable_hyphenCheckbox = document.getElementById("select_hyphen");
-const DOM_sortAscBtn = document.getElementById("sortAscBtn");
-const DOM_sortDescBtn = document.getElementById("sortDescBtn");
-const DOM_clearBtn = document.getElementById("clearBtn");
-const DOM_pasteBtn = document.getElementById("pasteBtn");
-const DOM_copyBtn = document.getElementById("copyBtn");
-
-const mesh_selected_fillColor = "#ff0000"
-const mesh_partlySelected_fillColor = "#ff7700"
-const mesh_default_fillColor = "#ffffff"
-const mesh_gridline_color = "#ff0000"
-const table_mouseOver_color = "#c0c0c0"
-const table_mouseLeave_color = ""
-
-const TABLE_MIN_ROW = 5; // min rows for the meshCodeTable
-const MESH_MINMAX_LIST = [ // meshlist paste boundaries
-  [35, 69], //1次メッシュのLat Vertical
-  [22, 46], //1次メッシュのLon Horizontal
-  [0, 7],   //2次メッシュのVertical
-  [0, 7],   //2次メッシュのHorizontal
-  [0, 9],   //3次メッシュのVertical
-  [0, 9]    //3次メッシュのHorizontal
-]
-const MESHDATA_FROM_LENGTH = {
-  4:{
-    "level:": 1,
-  },
-  6:{
-    "maxParts": 64,
-    "level:": 2,
-    "partsLength": 8,
-  },
-  8:{
-    "maxParts": 100,
-    "level:": 3,
-    "partsLength": 10,
-  }
-}
-
-// For a semi-permanant cookie (10 years)
-const tenYears = 10 * 365 * 24 * 60 * 60; // seconds
+import * as consts from "./meshConsts.js"
+import * as mapGenerator from "./meshGenerator.js"
 
 //////////////////////////////////
 // Functions
 //////////////////////////////////
-
 //---------------------------------
 // helper Functions
 //---------------------------------
@@ -82,7 +26,6 @@ function addHyphen(meshCode) {
   return hyphenMeshCode;
 }
 
-
 //---------------------------------
 // MeshSize Select Functions
 //---------------------------------
@@ -96,9 +39,10 @@ function checkMeshCode(meshArrayList) {
     }
     // メッシュコードが範囲内かどうかチェック
     const tmpMeshInt = Number(meshArrayList[i]);
+    const tgtMeshSize = Math.floor(n / 2) + 1;
     if (
-      !(tmpMeshInt >= MESH_MINMAX_LIST[i][0] &&
-        tmpMeshInt <= MESH_MINMAX_LIST[i][1])
+      !(tmpMeshInt >= consts.MESH_DATA[tgtMeshSize].boundary.lat &&
+        tmpMeshInt <= consts.MESH_DATA[tgtMeshSize].boundary.lon)
     ) {
       return false;
     }
@@ -109,27 +53,58 @@ function checkMeshCode(meshArrayList) {
 //---------------------------------
 // 緯度経度検索関数 LatLon Search Functions
 //---------------------------------
+function getTargetLatlonDOM(latlonNum){
+  let targetLatlonDom = null
+  switch (latlonNum) {
+    case 1:
+      targetLatlonDom = DOM_latlon_input_1
+      break;
+    case 2:
+      targetLatlonDom = DOM_latlon_input_2
+      break;
+  }
+  return targetLatlonDom
+}
+function updateLatLonCookie(latlonNum, targetLatlonDom){
+  switch (latlonNum) {
+    case 1:
+      setCookie(consts.DOM_IDS.latlng_input_1, targetLatlonDom.value)
+      break;
+    case 2:
+      setCookie(consts.DOM_IDS.latlng_input_2, targetLatlonDom.value)
+      break;
+  }
+}
 // 検索削除
-function clearLatLonSearch() {
-  // マーカーがある場合、削除
-  removeLatLonMarker();
-  DOM_latlon_input.value = "";
+function clearLatLonSearch(latlonNum) {
+  const tgtLatlonDom = getTargetLatlonDOM(latlonNum)
+  mapGenerator.removeLatLonMarker(); // マーカーがある場合、削除
+
+  // Clear the text box
+  tgtLatlonDom.value = "";
+  updateLatLonCookie(latlonNum, tgtLatlonDom)
 }
 
-function latLonSearch() {
+function setLatLonSearch(latlonNum) {
+  const tgtLatlonDom = getTargetLatlonDOM(latlonNum)
+
   // 入力値を取得
-  const zoomInputString = DOM_latlon_input.value.trim();
-  if (zoomInputString === "") {
-    // 空欄で検索した場合、マーカーがあれば削除
-    removeLatLonMarker();
+  const tgtLatLonString = tgtLatlonDom.value.trim();
+  const tgtLatLonArray = tgtLatLonString.split(",");
+  if (
+    (tgtLatLonArray.length != 2) ||
+    (!isNumeric(tgtLatLonArray[0])) || (!isNumeric(tgtLatLonArray[1]))
+   ) {
+    alert("不正の緯度経度: " + meshErrorArray);
   }
-  const zoomInputArray = zoomInputString.split(",");
+  
   const searchLatlngArray = [
-    parseFloat(zoomInputArray[0]),
-    parseFloat(zoomInputArray[1]),
+    parseFloat(tgtLatLonArray[0]),
+    parseFloat(tgtLatLonArray[1]),
   ];
 
-  zoomToLatLonMarker(searchLatlngArray, latLonSearchZoom)
+  mapGenerator.setLatLonMarker(searchLatlngArray, consts.LATLON_SEARCHZOOM)
+  updateLatLonCookie(latlonNum, tgtLatlonDom)
 }
 
 
@@ -140,9 +115,12 @@ function latLonSearch() {
 function changeMeshHyphen(hyphen_selection) {
   // テーブル取得
   // 末尾まで行を順に処理
-  for (let i = 0; (row = DOM_userSelected_meshTable.rows[i]); i++) {
+  for (let i = 0; i <= DOM_userSelected_meshTable.rows.length; i++) {
+    const row = DOM_userSelected_meshTable.rows[i]
+    if (!row){ break; }
+    
     // 元のテキストを取得
-    let original_text = row.cells[0].innerText;
+    const original_text = row.cells[0].innerText;
     // ハイフンありにした場合
     if (hyphen_selection.includes("-")) {
       // 元のテキストにハイフンがない場合のみ付与処理
@@ -154,8 +132,10 @@ function changeMeshHyphen(hyphen_selection) {
     } else {
       // ハイフンを除去
       row.cells[0].innerText = original_text.replace(/-/g, "");
+      
     }
   }
+  setCookie(consts.DOM_IDS.select_hyphen, hyphen_selection)
 }
 
 // メッシュリストを並べ替え
@@ -189,11 +169,12 @@ function clearTable() {
   // テーブルの行削除
   DOM_userSelected_meshTable.innerHTML = ""
   // テーブルに行を追加
-  for (let i = 0; i < TABLE_MIN_ROW; i++) {
+  for (let i = 0; i < consts.TABLE_MIN_ROW; i++) {
     insertRowToTable(DOM_userSelected_meshTable);
   }
-  updateMapMeshes()
+  mapGenerator.updateMapMeshes()
   updateSelectedMeshCounter();
+  saveMeshList()
 }
 
 // メッシュ貼り付け
@@ -207,7 +188,7 @@ function pasteMeshList() {
       const splitRows = clipText.split(/\r\n|\n|\r/).map(row => row.split('\t')[0]);
 
       // メッシュ不正リストを作成
-      let meshErrorArray = [];
+      const meshErrorArray = [];
       for (let currMeshCode of splitRows){
         if (currMeshCode == "") { continue; } // skip if empty
 
@@ -218,18 +199,23 @@ function pasteMeshList() {
         if (isNumeric(currMeshCode) && 
            (currMeshCode.length === 4 || currMeshCode.length === 6 || currMeshCode.length === 8)
         ) {
-          // メッシュコード配列を取得
-          let currMeshArray = convertMeshCode_to_meshArray(currMeshCode);
           // メッシュコードが正しい場合のみテーブルに追加
+          const currMeshArray = mapGenerator.convertMeshCode_to_meshArray(currMeshCode);
           if (checkMeshCode(currMeshArray)) {
             // メッシュコードがすでにテーブルに存在するか確認
-            if (isMeshCodeSelected(currMeshCode) === false) {
+            const selectedCode = isMeshCodeSelected(currMeshCode);
+            if (selectedCode == consts.SELECTCODE.not_selected){ // case 0: not selected
+              // console.log(currMeshCode)
               // 存在しない場合のみ追加
               insertMeshCodeToTable(currMeshCode);
               // 貼り付けた値の先頭の場合、値を保持 - the first item in the list is zoomed to at the end
               if (pasteFirstMeshCode === null) {
                 pasteFirstMeshCode = currMeshCode;
               }
+            }
+            else if (selectedCode == consts.SELECTCODE.partially_selected){ // case 2: partly selected
+              insertMeshCodeToTable(currMeshCode);
+              removeMeshCodeFromTable(currMeshCode)
             }
           } else {
             meshErrorArray.push(currMeshCode);
@@ -240,11 +226,13 @@ function pasteMeshList() {
       }
       if (pasteFirstMeshCode != null) {
         // 貼り付けた先頭のメッシュを表示
-        zoomToMesh(pasteFirstMeshCode);
+        mapGenerator.zoomToMesh(pasteFirstMeshCode);
+        // updateMapMeshes()
       }
       if (meshErrorArray.length > 0) {
         alert("貼り付けメッシュコード不正: " + meshErrorArray);
       }
+      updateSelectedMeshCounter();
     }
   );
 }
@@ -291,25 +279,19 @@ function updateSelectedMeshCounter() {
 function isMeshCodeSelected(meshCode) {
   for (let i = 0; i < DOM_userSelected_meshTable.rows.length; i++) {
     // テーブル内のメッシュからハイフンを除去して取得
-    const meshTableRow = DOM_userSelected_meshTable.rows[i].cells[0].innerText.replace(/-/g, "");
+    const rowMeshCode = DOM_userSelected_meshTable.rows[i].cells[0].innerText.replace(/-/g, "");
     // 該当するメッシュの場合、行番号を返却
-    if (meshTableRow.trim() != ""){
-      // if (
-      //     (meshCode.startsWith(meshTableRow)) || 
-      //     
-      // ) { 
-      //   return true;
-      // }
+    if (rowMeshCode.trim() != ""){
       if (
-        (meshTableRow == meshCode) ||
-        (meshCode.startsWith(meshTableRow)) // 5733.startsWith(573336) F, 573336.startsWith(5733) T
-      ){ return 1; }
+        (rowMeshCode == meshCode) ||
+        (meshCode.startsWith(rowMeshCode)) // 5733.startsWith(573336) F, 573336.startsWith(5733) T
+      ){ return consts.SELECTCODE.selected; } // case 1: selected
       else if (
-        (meshTableRow.startsWith(meshCode)) // 573336.startsWith(5733) T, 5733.startsWith(573336) F
-      ){ return 2; }
+        (rowMeshCode.startsWith(meshCode)) // 573336.startsWith(5733) T, 5733.startsWith(573336) F
+      ){ return consts.SELECTCODE.partially_selected; } // case 2: partly selected
     }
   }
-  return 0;
+  return consts.SELECTCODE.not_selected; // case 0: not selected
 }
 
 const meshClicked = (meshCode) => {
@@ -317,7 +299,7 @@ const meshClicked = (meshCode) => {
   const isSelected = isMeshCodeSelected(meshCode)
 
   // if not selected insert it into the table
-  if (!isSelected) { 
+  if (isSelected == consts.SELECTCODE.not_selected) { 
     insertMeshCodeToTable(meshCode);
   } else {
   // if selected remove from table
@@ -332,7 +314,7 @@ const meshClicked = (meshCode) => {
 // 選択したメッシュをテーブルに追加
 // Inserts a meshCode into the table, table has min rows of 5, if any of those 5 are empty use it, otherwise add row.
 function insertMeshCodeToTable(meshCode) {
-  const meshSizeDict = MESHDATA_FROM_LENGTH[meshCode.length]
+  const meshSizeDict = consts.MESH_DATA_FROM_LENGTH[meshCode.length]
 
   if (meshSizeDict.level == 1){ //(ex 5433) size 1 goes straight to add
     insertMeshCodeToTable_inner(meshCode)
@@ -352,15 +334,16 @@ function insertMeshCodeToTable(meshCode) {
       insertMeshCodeToTable_inner(meshCode)
     }
   }
+  saveMeshList()
 }
 function insertMeshCodeToTable_inner(text){
-  const meshCode = text
+  let meshCode = text
   const inputCellIndex = getTableEmptyRowOrAddNewRow();
 
   // セルを追加 - get the cell in the row
   const tgtCell = DOM_userSelected_meshTable.rows[inputCellIndex].cells[0];
   // ハイフン有無の選択状態を取得 - add hyphens if needed
-  if (DOM_userSelected_meshTable_hyphenCheckbox.value.includes("-")) {
+  if (DOM_userSelected_meshTable_hyphenSelect.value.includes("-")) {
     // -ありの場合、メッシュコードにハイフンを付与
     meshCode = addHyphen(meshCode);
   }
@@ -369,10 +352,17 @@ function insertMeshCodeToTable_inner(text){
 
   // マウスオンを設定
   tgtCell.addEventListener("mouseover", function (e) {
-    e.target.style.background = table_mouseOver_color;
+    e.target.style.background = consts.COLORS.TABLE.mouseOver;
   });
   tgtCell.addEventListener("mouseleave", function (e) {
-    e.target.style.background = table_mouseLeave_color;
+    e.target.style.background = consts.COLORS.TABLE.mouseLeave;
+  });
+  // クリックイベントを付与
+  tgtCell.addEventListener("click", function (e) { 
+    // メッシュにズーム
+    const tgtMeshCode = e.currentTarget.innerText.replace(/-/g, "");
+    if ((tgtMeshCode == null) || (tgtMeshCode == "")) { return; }
+    mapGenerator.zoomToMesh(tgtMeshCode);
   });
 }
 function getTableEmptyRowOrAddNewRow(){
@@ -400,34 +390,28 @@ function getTableEmptyRowOrAddNewRow(){
 function insertRowToTable(meshTable) {
   const insertRow = meshTable.insertRow(-1); //adds row to the end of the table
   insertRow.insertCell(-1);
-  // クリックイベントを付与
-  insertRow.addEventListener("click", function (e) {
-    // メッシュにズーム
-    const tgtMeshCode = e.currentTarget.innerText.replace(/-/g, "");
-    if ((tgtMeshCode == null) || (tgtMeshCode == "")) { return; }
-    zoomToMesh(tgtMeshCode);
-  });
   return meshTable;
 }
 
 
 
 function removeMeshCodeFromTable(meshCode){
-  const meshSizeDict = MESHDATA_FROM_LENGTH[meshCode.length]
+  const meshSizeDict = consts.MESH_DATA_FROM_LENGTH[meshCode.length]
   //check if its parent meshCode
   if (meshSizeDict.size == 1){
     removeMeshCodeFromTable_inner(meshCode)
   }
   else {
     //cacade to top level if needed, skipping self size
-    for (const meshSizeLength in MESHDATA_FROM_LENGTH){
+    for (const meshSizeLength in consts.MESH_DATA_FROM_LENGTH){
       if (meshCode.length == meshSizeLength) { break }
 
       const upperLevelMeshCode = meshCode.substring(0, meshSizeLength);
       const currLevelMeshCode = meshCode.substring(0, (Number(meshSizeLength)+2));
       let upperLevelCodeFound = false
       for (const row of DOM_userSelected_meshTable.rows){
-        if (row.cells[0].innerText == upperLevelMeshCode){
+        const rowMeshCode = row.cells[0].innerText.replace(/-/g, "");
+        if (rowMeshCode == upperLevelMeshCode){
           upperLevelCodeFound = true
           break
         }
@@ -438,14 +422,15 @@ function removeMeshCodeFromTable(meshCode){
     }
     removeMeshCodeFromTable_inner(meshCode)
   }
+  saveMeshList()
 }
 function removeMeshCodeFromTable_unGroupUpperLevel(upperLevelMeshCode, currLevelMeshCode){
   //remove upper mesh size selection
   removeMeshCodeFromTable(upperLevelMeshCode)
   // add all parts except the target meshCode to be removed
   // console.log(`${meshSizesFromLength[currLevelMeshCode.length].partsLength}, ${currLevelMeshCode.length} ][ ${upperLevelMeshCode}, ${currLevelMeshCode}`)
-  for (let x = 0; x < MESHDATA_FROM_LENGTH[currLevelMeshCode.length].partsLength; x++){
-    for (let y = 0; y < MESHDATA_FROM_LENGTH[currLevelMeshCode.length].partsLength; y++){
+  for (let x = 0; x < consts.MESH_DATA_FROM_LENGTH[currLevelMeshCode.length].partsLength; x++){
+    for (let y = 0; y < consts.MESH_DATA_FROM_LENGTH[currLevelMeshCode.length].partsLength; y++){
       const meshLoop = `${upperLevelMeshCode}${x}${y}`
       insertMeshCodeToTable_inner(meshLoop)
     }
@@ -477,41 +462,163 @@ function removeIndexFromTable(rowIdx){
   DOM_userSelected_meshTable.deleteRow(rowIdx);
   // 削除した結果、最小行数未満の場合は、末尾に行追加
   const currRowNum = DOM_userSelected_meshTable.rows.length;
-  if (currRowNum < TABLE_MIN_ROW) {
+  if (currRowNum < consts.TABLE_MIN_ROW) {
     insertRowToTable(DOM_userSelected_meshTable)
   }
   // 選択したメッシュ数を表示
   updateSelectedMeshCounter();
 }
 
+//---------------------------------
+// cookie Functions
+//---------------------------------
+function setCookie(key, val){
+  document.cookie = `${key}=${val}; Max-Age=${consts.COOKIE_SETTINGS.expiry}; path=/`
+}
+function _updateMapPositionCookie(lat, lon, zoom){
+  setCookie(consts.DOM_IDS.STARTING_POSITION_COOKIE_NAME, `${lat},${lon},${zoom}`)
+}
+function meshSizeUpdated(){
+  mapGenerator.updateMapMeshes()
+  setCookie(consts.DOM_IDS.select_meshlevel, DOM_userSelected_meshSize.value)
+}
+function saveMeshList(){
+  let cookieCount = 0;
+  let meshCount = 0;
+  let meshList = "";
+
+  const rows = DOM_userSelected_meshTable.rows;
+  for (const row of rows){
+    const rowMeshCode = row.cells[0].innerText.replace(/-/g, "").trim()
+    if (rowMeshCode == ""){
+      continue
+    }
+    else if (meshList == ""){
+      meshList = rowMeshCode
+    } else {
+      meshList = `${meshList},${rowMeshCode}`
+    }
+
+    meshCount = meshCount + 1
+    if (meshCount >= consts.COOKIE_SETTINGS.meshCode_count_perCookie){
+      setCookie(`${consts.DOM_IDS.meshlist_table}_${cookieCount}`, meshList)
+      meshCount = 0
+      meshList = ""
+      cookieCount = cookieCount + 1
+      if (cookieCount >= consts.COOKIE_SETTINGS.meshCode_count) { break }
+    }
+  }
+
+  // write/clear out the rest of the cookies
+  for (; cookieCount < consts.COOKIE_SETTINGS.meshCode_count; cookieCount++){ 
+    setCookie(`${consts.DOM_IDS.meshlist_table}_${cookieCount}`, meshList)
+    meshList = ""
+  }
+}
+
+
+
+function test() {
+  // save a cookie
+  document.cookie = `${consts.DOM_IDS.latlng_input_1}=hello world; Max-Age=${consts.COOKIE_SETTINGS.expiry}; path=/`
+  document.cookie = `${consts.DOM_IDS.latlng_input_2}=bye world; Max-Age=${consts.COOKIE_SETTINGS.expiry}; path=/`
+  
+  
+}
+function test2(){
+  saveMeshList()
+}
 
 //////////////////////////////////
 // initialization
 //////////////////////////////////
 //---------------------------------
-// イベント定義 Register Events
+// init Constants
 //---------------------------------
-// HTML読み込み完了時の処理
-document.addEventListener("DOMContentLoaded", ()=> {
-  // テーブルに行を追加
-  for (let i = 0; i < TABLE_MIN_ROW; i++) {
-    insertRowToTable(DOM_userSelected_meshTable);
-  }
-
-  DOM_userSelected_meshTable_hyphenCheckbox.addEventListener("change", (e)=> changeMeshHyphen(e.currentTarget.value)); // ハイフン有無の選択
-  DOM_userSelected_meshSize                .addEventListener("change", () => updateMapMeshes()); // メッシュコードセレクトの選択
-  DOM_clearMarkerBtn.addEventListener("click", ()=> clearLatLonSearch());
-  DOM_zoomToPointBtn.addEventListener("click", ()=> latLonSearch());
-  DOM_sortAscBtn    .addEventListener("click", ()=> sortTable("asc"));
-  DOM_sortDescBtn   .addEventListener("click", ()=> sortTable("desc"));
-  DOM_clearBtn      .addEventListener("click", ()=> clearTable());
-  DOM_pasteBtn      .addEventListener("click", ()=> pasteMeshList());
-  DOM_copyBtn       .addEventListener("click", ()=> copyMeshList());
-});
+const DOM_userSelected_meshSize = document.getElementById(consts.DOM_IDS.select_meshlevel);
+const DOM_latlon_input_1 = document.getElementById(consts.DOM_IDS.latlng_input_1);
+const DOM_clearMarkerBtn_1 = document.getElementById(consts.DOM_IDS.clearMarkerBtn_1);
+const DOM_zoomToPointBtn_1 = document.getElementById(consts.DOM_IDS.zoomToPointBtn_1);
+const DOM_latlon_input_2 = document.getElementById(consts.DOM_IDS.latlng_input_2);
+const DOM_clearMarkerBtn_2 = document.getElementById(consts.DOM_IDS.clearMarkerBtn_2);
+const DOM_zoomToPointBtn_2 = document.getElementById(consts.DOM_IDS.zoomToPointBtn_2);
+const DOM_userSelected_meshTable = document.getElementById(consts.DOM_IDS.meshlist_table);
+const DOM_meshTable_selectedMeshCounter = document.getElementById(consts.DOM_IDS.selected_mesh_count);
+const DOM_userSelected_meshTable_hyphenSelect = document.getElementById(consts.DOM_IDS.select_hyphen);
+const DOM_sortAscBtn = document.getElementById(consts.DOM_IDS.sortAscBtn);
+const DOM_sortDescBtn = document.getElementById(consts.DOM_IDS.sortDescBtn);
+const DOM_clearBtn = document.getElementById(consts.DOM_IDS.clearBtn);
+const DOM_pasteBtn = document.getElementById(consts.DOM_IDS.pasteBtn);
+const DOM_copyBtn = document.getElementById(consts.DOM_IDS.copyBtn);
 
 //---------------------------------
 // init Functions
 //---------------------------------
+function initCookies(){
+  const cookiesArray = document.cookie.split(";");
+  for (let cookie of cookiesArray){
+    cookie = cookie.trim().split("=")
+    // console.log(`cookie[${cookie[0]}][${cookie[1]}]`)
+    const key = cookie[0].trim()
+    const val = cookie[1].trim()
+    switch (key){
+      case consts.DOM_IDS.latlng_input_1:
+        DOM_latlon_input_1.value = val
+        break;
+      case consts.DOM_IDS.latlng_input_2:
+        DOM_latlon_input_2.value = val
+        break;
+      case consts.DOM_IDS.STARTING_POSITION_COOKIE_NAME:
+        const startPosition = val.split(",")
+        consts.START_DATA.coordinates = [startPosition[0], startPosition[1]]
+        consts.START_DATA.zoom = startPosition[2]
+        break
+      case consts.DOM_IDS.select_meshlevel:
+        DOM_userSelected_meshSize.value = val;
+        break
+      case consts.DOM_IDS.select_hyphen:
+        DOM_userSelected_meshTable_hyphenSelect.value = val
+        break
+      default:
+        if (key.startsWith(consts.DOM_IDS.meshlist_table)){
+          const meshCodes = val.split(",")
+          for (const code of meshCodes){
+            if (code.trim() != ""){
+              insertMeshCodeToTable_inner(code)
+            }
+          }
+        } else {
+          console.log(`No matching cookie case[${cookie[0]}]`);
+        }
+    }
+  }
+}
+
+//---------------------------------
+// イベント定義 Register Events and set init Consts
+//---------------------------------
+// HTML読み込み完了時の処理
+document.addEventListener("DOMContentLoaded", ()=> {
+  // テーブルに行を追加
+  if (DOM_userSelected_meshTable.rows.length < consts.TABLE_MIN_ROW){
+    for (let i = DOM_userSelected_meshTable.rows.length; i < consts.TABLE_MIN_ROW; i++) {
+      insertRowToTable(DOM_userSelected_meshTable);
+    }
+  }
+
+  DOM_userSelected_meshSize              .addEventListener("change", () => meshSizeUpdated()); // メッシュコードセレクトの選択
+  DOM_userSelected_meshTable_hyphenSelect.addEventListener("change", (e)=> changeMeshHyphen(e.currentTarget.value)); // ハイフン有無の選択
+  DOM_clearMarkerBtn_1.addEventListener("click", ()=> clearLatLonSearch(1));
+  DOM_zoomToPointBtn_1.addEventListener("click", ()=> setLatLonSearch(1));
+  DOM_clearMarkerBtn_2.addEventListener("click", ()=> clearLatLonSearch(2));
+  DOM_zoomToPointBtn_2.addEventListener("click", ()=> test2());
+  DOM_sortAscBtn      .addEventListener("click", ()=> sortTable("asc"));
+  DOM_sortDescBtn     .addEventListener("click", ()=> sortTable("desc"));
+  DOM_clearBtn        .addEventListener("click", ()=> clearTable());
+  DOM_pasteBtn        .addEventListener("click", ()=> pasteMeshList());
+  DOM_copyBtn         .addEventListener("click", ()=> copyMeshList());
+});
+
 const _getUserSelectedMeshSize = () => DOM_userSelected_meshSize.value;
 const _isMeshCodeSelected = (meshCode) => isMeshCodeSelected(meshCode) // 選択したメッシュのテーブル行番号を取得
 const _meshClicked = (meshCode) => meshClicked(meshCode)
@@ -519,19 +626,13 @@ const _meshClicked = (meshCode) => meshClicked(meshCode)
 //---------------------------------
 // init Executions
 //---------------------------------
+initCookies()
+
 updateSelectedMeshCounter(); // 選択したメッシュ数を表示
-initMapGenerator(
-  map_dom_id,
-  starting_coordinates,
-  starting_zoom,
-
-  mesh_selected_fillColor,
-  mesh_partlySelected_fillColor,
-  mesh_default_fillColor,
-  mesh_gridline_color,
-
+mapGenerator.initMapGenerator(
   _getUserSelectedMeshSize, //getMeshSize
   _isMeshCodeSelected, //check if mesh selected
-  _meshClicked //actions to perform when a mesh is clicked
+  _meshClicked, //actions to perform when a mesh is clicked
+  _updateMapPositionCookie //updates map position cookies
 )
 

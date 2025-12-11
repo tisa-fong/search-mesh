@@ -1,70 +1,18 @@
+import * as consts from "./meshConsts.js"
+
 // function export list is at the bottom
 //This generates meshes on a leaflet map based on the Japanese mesh system
 
 //////////////////////////////////
-// Constants
-//////////////////////////////////
-const meshArrayLengthList = [2, 2, 1, 1, 1, 1];
-
-const mapMeshSettings = {
-  "init_view": [35.658577, 139.745451],
-  "init_zoom": 7,
-  "mesh_fillColor_selected": "#ff0000",
-  "mesh_fillColor_partlySelected": "#ff7700",
-  "mesh_fillColor_default": "#ffffff",
-  "mesh_gridLineColor": "#ff0000",
-}
-
-// calculation ratios for japanese meshes
-const meshSizeData = {
-  1: {
-    "defaultZoom": 9, // メッシュコードからメッシュサイズを取得 //called from zoomToMesh
-    "zoomThresholds": [6, 0], // threshold for line sizes
-    "ratio": {
-      "lat": 40 / 60,
-      "lon": 1
-    }
-  },
-  2: {
-    "defaultZoom": 12,
-    "zoomThresholds": [9, 7],
-    "ratio": {
-      "lat": 5 / 60,
-      "lon": 7.5 / 60
-    }
-  },
-  3: {
-    "defaultZoom": 14,
-    "zoomThresholds": [12, 10],
-    "ratio": {
-      "lat": 30 / 60 / 60,
-      "lon": 45 / 60 / 60
-    }
-  }
-};
-
-// polygon boundaries - do not generate outside of japan
-const latlon_boundaries = {
-  "lat": {
-    "min": 23,  // Bottom boundary
-    "max": 47   // Top boundary
-  },
-  "lon": {
-    "min": 122, // Left boundary
-    "max": 147  // Right boundary
-  }
-}
-
-
-//////////////////////////////////
 // Global Variables
 //////////////////////////////////
-const currentState = {
-  "meshSize": 1,
-  "meshCache": {},
-  "textVisiblity": false, // メッシュのテキスト表示
-  "searchMarker": null // 検索時のマーカーを準備
+const mapMeshSettings = {
+  meshSize: 1,
+  meshCache: {},
+  textVisiblity: false, // メッシュのテキスト表示
+  searchMarker: null // 検索時のマーカーを準備
 }
+
 let map = null
 let canvasRenderer = null 
 let meshLayer = null
@@ -72,41 +20,27 @@ let meshLayer = null
 let getUserSelectedMeshSize = null;
 let isMeshCodeSelected = null;
 let meshClicked = null;
-
+let updateMapPositionCookie = null;
 
 //////////////////////////////////
 // Exported Functions - see list(and export) at the bottom of this file
 //////////////////////////////////
-function initMapGenerator(
-    map_dom_id,
-    _init_view,
-    _init_zoom,
-    
-    _mesh_fillColor_selected,
-    _mesh_fillColor_partlySelected,
-    _mesh_fillColor_default,
-    _mesh_gridLineColor,
-
+function initMapGenerator(   
     _getUserSelectedMeshSize, 
     _isMeshCodeSelected,
     _meshClicked,
+    _updateMapPositionCookie,
   ){
-  mapMeshSettings.init_view = _init_view
-  mapMeshSettings.init_zoom = _init_zoom
-  
-  mapMeshSettings.mesh_fillColor_selected = _mesh_fillColor_selected;
-  mapMeshSettings.mesh_fillColor_partlySelected = _mesh_fillColor_partlySelected;
-  mapMeshSettings.mesh_fillColor_default = _mesh_fillColor_default;
-  mapMeshSettings.mesh_gridLineColor = _mesh_gridLineColor;
-
+  // get updated consts data into Settings
   getUserSelectedMeshSize = _getUserSelectedMeshSize;
   isMeshCodeSelected = _isMeshCodeSelected;
   meshClicked = _meshClicked;
+  updateMapPositionCookie = _updateMapPositionCookie;
 
   // Set map defaults and consts
   canvasRenderer = L.canvas({  });
   meshLayer = L.layerGroup();
-  map = L.map(map_dom_id).setView(mapMeshSettings.init_view, mapMeshSettings.init_zoom); //Sets default area to show at load
+  map = L.map(consts.MAP_DOM_ID).setView(consts.START_DATA.coordinates, consts.START_DATA.zoom); //Sets default area to show at load
   map.doubleClickZoom.disable();
   // メッシュグループをレイヤーとして追加
   map.addLayer(meshLayer);
@@ -121,11 +55,11 @@ function initMapGenerator(
   // 移動、ズームが終了時の処理 - update meshes on map zoom or move
   map.on("moveend", function (e) {
     updateMapMeshes();
+    updateMapPositionCookie(map.getCenter().lat, map.getCenter().lng, map.getZoom())
   });
 
   updateMapMeshes();
 }
-
 
 // メッシュレイヤー表示
 function updateMapMeshes() {
@@ -153,8 +87,8 @@ function updateMapMeshes() {
   const [minMeshMinLat, minMeshMinLon] = getMeshMinLatlon(minMeshArray);
 
   // メッシュの一辺の緯度経度サイズ配列取得
-  const meshLatUnit = meshSizeData[meshSize].ratio.lat;
-  const meshLonUnit = meshSizeData[meshSize].ratio.lon;
+  const meshLatUnit = consts.MESH_DATA[meshSize].ratio.lat;
+  const meshLonUnit = consts.MESH_DATA[meshSize].ratio.lon;
 
   // 西端から東端までループ
   let lonCounter = 0;
@@ -203,7 +137,7 @@ function updateMapMeshes() {
 
 
       // テキスト表示設定
-      if (currentState.textVisiblity) {
+      if (mapMeshSettings.textVisiblity) {
         setMeshText(meshPolygon, false);
       }
       
@@ -211,7 +145,7 @@ function updateMapMeshes() {
       meshPolygon.on("mouseover", function () {
         // スタイル設定
         setMouseOverOutStyle(this, meshSize, true);
-        if (currentState.textVisiblity) {
+        if (mapMeshSettings.textVisiblity) {
           // テキスト表示設定
           setMeshText(this, true);
         }
@@ -220,7 +154,7 @@ function updateMapMeshes() {
         // スタイル設定
         setMouseOverOutStyle(this, meshSize, false);
         // テキスト表示設定
-        if (currentState.textVisiblity) {
+        if (mapMeshSettings.textVisiblity) {
           // テキスト表示
           setMeshText(this, false);
         }
@@ -256,11 +190,11 @@ function zoomToMesh(meshCode) {
   // メッシュの左下緯度経度を取得
   const [minLat, minLon] = getMeshMinLatlon(meshArray);
   // メッシュサイズに応じて、中心地点を算出
-  const centerLat = minLat + (meshSizeData[meshSize].ratio.lat / 2);
-  const centerLon = minLon + (meshSizeData[meshSize].ratio.lon / 2);
+  const centerLat = minLat + (consts.MESH_DATA[meshSize].ratio.lat / 2);
+  const centerLon = minLon + (consts.MESH_DATA[meshSize].ratio.lon / 2);
   // 対象メッシュを表示
-  const zoomSize = meshSizeData[meshSize].defaultZoom;
-  map.setView([centerLat, centerLon], zoomSize);
+  const zoomSize = consts.MESH_DATA[meshSize].defaultZoom;
+  zoomToLatLon(centerLat, centerLon, zoomSize)
 }
 
 // メッシュコードからメッシュコード配列を取得
@@ -271,7 +205,7 @@ function convertMeshCode_to_meshArray(meshCode) {
   let loopCounter = 0;
   // メッシュコードを配列に変換
   while (tmpMeshCode.length > 0) {
-    const tmpMeshSplit = tmpMeshCode.slice(0, meshArrayLengthList[loopCounter]);
+    const tmpMeshSplit = tmpMeshCode.slice(0, consts.MESH_DATA.MESH_ARRAY_LENGTH_LIST[loopCounter]);
     meshArray.push(tmpMeshSplit);
     tmpMeshCode = tmpMeshCode.replace(tmpMeshSplit, "");
     loopCounter += 1;
@@ -281,20 +215,21 @@ function convertMeshCode_to_meshArray(meshCode) {
 
 // マーカーがある場合、削除
 function removeLatLonMarker() {
-  if (currentState.searchMarker != null) {
-    map.removeLayer(currentState.searchMarker);
-    currentState.searchMarker == null;
+  if (mapMeshSettings.searchMarker != null) {
+    map.removeLayer(mapMeshSettings.searchMarker);
+    mapMeshSettings.searchMarker == null;
   }
 }
 
 // 検索
-function zoomToLatLonMarker(searchLatlngArray, zoomSize) {
-  // 検索地点を表示
-  map.setView(searchLatlngArray, zoomSize);
+function setLatLonMarker(searchLatlngArray, zoomSize) {
   // マーカーがある場合、削除
   removeLatLonMarker();
   // 検索地点にマーカーを立てる
-  currentState.searchMarker = new L.marker(searchLatlngArray).addTo(map);
+  mapMeshSettings.searchMarker = new L.marker(searchLatlngArray).addTo(map);
+
+  // 検索地点を表示
+  zoomToLatLon(searchLatlngArray[0], searchLatlngArray[1], zoomSize)
 }
 
 
@@ -303,6 +238,11 @@ function zoomToLatLonMarker(searchLatlngArray, zoomSize) {
 //////////////////////////////////
 // Helper Functions
 //////////////////////////////////
+function zoomToLatLon(lat, lon, zoom){
+  map.setView([lat, lon], zoom);
+  updateMapPositionCookie(lat, lon, zoom)
+}
+
 //--------------------------------
 // メッシュコード関数 - meshSize functions
 //--------------------------------
@@ -334,7 +274,7 @@ function getMeshSizeFromZoomSize() {
     }
   }
 
-  currentState.meshSize = meshSize
+  mapMeshSettings.meshSize = meshSize
   return meshSize;
 }
 
@@ -382,8 +322,8 @@ function getMeshMinLatlon(meshArray) {
     const latCode = meshArray[i];
     const lonCode = meshArray[i + 1];
 
-    minLat += latCode * meshSizeData[meshLevel].ratio.lat;
-    minLon += lonCode * meshSizeData[meshLevel].ratio.lon;
+    minLat += latCode * consts.MESH_DATA[meshLevel].ratio.lat;
+    minLon += lonCode * consts.MESH_DATA[meshLevel].ratio.lon;
   }
   return [minLat, minLon];
 }
@@ -391,8 +331,8 @@ function getMeshMinLatlon(meshArray) {
 // 日本のメッシュチェック
 function checkLatlonInside(minLat, minLon, maxLat, maxLon) {
   if (
-    latlon_boundaries["lat"]["min"] <= minLat && maxLat <= latlon_boundaries["lat"]["max"] &&
-    latlon_boundaries["lon"]["min"] <= minLon && maxLon <= latlon_boundaries["lon"]["max"]
+    consts.MESH_DATA.BOUNDARIES["lat"]["min"] <= minLat && maxLat <= consts.MESH_DATA.BOUNDARIES["lat"]["max"] &&
+    consts.MESH_DATA.BOUNDARIES["lon"]["min"] <= minLon && maxLon <= consts.MESH_DATA.BOUNDARIES["lon"]["max"]
   ) {
     return true;
   } else {
@@ -407,28 +347,27 @@ function checkLatlonInside(minLat, minLon, maxLat, maxLon) {
 function setMeshStyle(meshPolygon, meshSize, selectedCode) {
   const zoomSize = map.getZoom();
   let lineWeight = 2
-  if (zoomSize < meshSizeData[meshSize].zoomThresholds[1]){
+  if (zoomSize < consts.MESH_DATA[meshSize].zoomThresholds[1]){
     lineWeight = 0
   }
-  else if (zoomSize < meshSizeData[meshSize].zoomThresholds[0]){
+  else if (zoomSize < consts.MESH_DATA[meshSize].zoomThresholds[0]){
     lineWeight = 1
   }
 
   let meshFillColor;
   switch (selectedCode) {
-    case 0: // not selected
-      meshFillColor = mapMeshSettings.mesh_fillColor_default;
+    case consts.SELECTCODE.not_selected: // not selected
+      meshFillColor = consts.COLORS.MESH.default_fill;
       break;
-    case 1: // selected
-      meshFillColor = mapMeshSettings.mesh_fillColor_selected;
+    case consts.SELECTCODE.selected: // selected
+      meshFillColor = consts.COLORS.MESH.selected_fill;
       break;
-    case 2: //partly selected
-      meshFillColor = mapMeshSettings.mesh_fillColor_partlySelected;
+    case consts.SELECTCODE.partially_selected: //partly selected
+      meshFillColor = consts.COLORS.MESH.partlySelected_fill;
       break;
-      
   }
   meshPolygon.setStyle({
-    color: mapMeshSettings.mesh_gridLineColor, // gird line color
+    color: consts.COLORS.MESH.gridline, // gird line color
     fillColor: meshFillColor, // inner square fill color
     fillOpacity: 0.2,
     weight: lineWeight,
@@ -440,20 +379,19 @@ function setMeshStyle(meshPolygon, meshSize, selectedCode) {
 function setMeshTextVisiblity() {
   var meshSize = getMeshSizeFromZoomSize();
   var zoomSize = map.getZoom();
-  // console.log(`meshSize[${meshSize}], zoomSize[${zoomSize}]`)
   if (meshSize == 1 && zoomSize >= 7) {
-    currentState.textVisiblity = true;
+    mapMeshSettings.textVisiblity = true;
     return
   }
   if (meshSize == 2 && zoomSize >= 10) {
-    currentState.textVisiblity = true;
+    mapMeshSettings.textVisiblity = true;
     return
   }
   if (meshSize == 3 && zoomSize >= 13) {
-    currentState.textVisiblity = true;
+    mapMeshSettings.textVisiblity = true;
     return
   }
-  currentState.textVisiblity = false;
+  mapMeshSettings.textVisiblity = false;
 }
 
 
@@ -461,10 +399,10 @@ function setMeshTextVisiblity() {
 function setMouseOverOutStyle(layer, meshSize, isOver) {
   const zoomSize = map.getZoom();
   let lineWeight = isOver? 4: 2;
-  if (zoomSize < meshSizeData[meshSize].zoomThresholds[1]){
+  if (zoomSize < consts.MESH_DATA[meshSize].zoomThresholds[1]){
     lineWeight = isOver? 1: 0;
   }
-  else if (zoomSize < meshSizeData[meshSize].zoomThresholds[0]){
+  else if (zoomSize < consts.MESH_DATA[meshSize].zoomThresholds[0]){
     lineWeight = isOver? 2: 1;
 
   }
@@ -505,5 +443,5 @@ export {
   zoomToMesh, 
   convertMeshCode_to_meshArray, 
   removeLatLonMarker, 
-  zoomToLatLonMarker 
+  setLatLonMarker
 };

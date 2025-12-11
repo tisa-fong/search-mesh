@@ -46,6 +46,8 @@ input[type="button"] {
   float: left;
   width: 350px;
   background-color: #ffffff;
+  resize: horizontal;   /* allows horizontal resizing */
+  overflow: auto;       /* required for resize to work */
 }
 .latlng_input {
   flex: 1;  
@@ -73,8 +75,8 @@ input[type="button"] {
   overflow-x: hidden;
   overflow-y: auto;
 }
-#list_table {
-  width: 330px;
+#meshlist_table {
+  width: 100%;
   /* max-height: 10px; */
   overflow-y: scroll;
   margin: 5px 0px 0px 0px;
@@ -87,17 +89,17 @@ input[type="button"] {
 #selected_mesh_count{
   font-size: 9px;
 }
-.list_table tr,
+.meshlist_table tr,
 td {
   width: 100%;
 }
-#list_table tr {
+#meshlist_table tr {
   height: 22px;
   margin: 0;
   padding: 0;
   background: #f9f9f9;
 }
-#list_table tr:nth-child(even) {
+#meshlist_table tr:nth-child(even) {
   background: #ffffff;
 }
 .leaflet-tooltip_base {
