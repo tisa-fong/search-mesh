@@ -202,11 +202,17 @@ function insertMeshCodeToTable(meshCode) {
     const upperLevelMeshCode = meshCode.substring(0, meshCode.length-2) // if 2 > 6-2=4, if 3 > 8-2=6
     let count = 1 //include the new one to be added
     for (const row of consts.DOMs.DOM_userSelected_meshTable.rows){
-      if (row.cells[0].innerText.startsWith(upperLevelMeshCode)){
+      const rowText = row.cells[0].innerText.replace(/-/g, "")
+      if (
+        (rowText.length == meshSizeDict.meshLength) &&
+        (rowText.startsWith(upperLevelMeshCode))
+      ){
+        // console.log(`tobeAdded[${meshCode}], count[${count}]: row[${rowText}], upper[${upperLevelMeshCode}]`)
         count++
       }
     }
     if (count >= meshSizeDict.maxParts){
+      // console.log(`count[${count}], meshSizeDict[${meshSizeDict.maxParts}]`)
       removeMeshCodeFromTable(upperLevelMeshCode)
       insertMeshCodeToTable(upperLevelMeshCode)
     } else {

@@ -83,6 +83,7 @@ export const MESH_DATA = {
     },
     1: {
         level: 1,
+        meshLength: 4,
         defaultZoom: 9, // メッシュコードからメッシュサイズを取得 //called from zoomToMesh
         zoomThresholds: [6, 0], // threshold for line sizes
         ratio: { // calculation ratios for japanese meshes
@@ -96,6 +97,7 @@ export const MESH_DATA = {
     },
     2: {
         level: 2,
+        meshLength: 6,
         defaultZoom: 12,
         zoomThresholds: [9, 7],
         ratio: {
@@ -111,6 +113,7 @@ export const MESH_DATA = {
     },
     3: {
         level: 3,
+        meshLength: 8,
         defaultZoom: 14,
         zoomThresholds: [12, 10],
         ratio: {
