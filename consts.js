@@ -27,7 +27,28 @@ export const DOM_IDS = {
     clearBtn: "clearBtn",
     pasteBtn: "pasteBtn",
     copyBtn: "copyBtn",
+    plusMinus1Btn: "plusMinus1Btn"
 }
+export const DOMs = { //set in meshService
+    DOM_userSelected_meshSize: null,
+    DOM_latlon_input_1: null,
+    DOM_clearMarkerBtn_1: null,
+    DOM_zoomToPointBtn_1: null,
+    DOM_latlon_input_2: null,
+    DOM_clearMarkerBtn_2: null,
+    DOM_zoomToPointBtn_2 : null,
+    DOM_userSelected_meshTable: null,
+    DOM_meshTable_selectedMeshCounter: null,
+    DOM_userSelected_meshTable_hyphenSelect: null,
+    DOM_sortAscBtn: null,
+    DOM_sortDescBtn: null,
+    DOM_clearBtn: null,
+    DOM_pasteBtn: null,
+    DOM_copyBtn: null,
+    DOM_plusMinus1Btn: null,
+} 
+
+
 
 export const COLORS = {
     MESH: {
@@ -114,4 +135,27 @@ export const SELECTCODE = {
   not_selected: 0,
   selected: 1,
   partially_selected: 2
+}
+
+
+//---------------------------------
+// helper Functions
+//---------------------------------
+export function isNumeric(str) {
+  return str !== "" && !isNaN(str);
+}
+
+// メッシュコードにハイフン付与
+export function addHyphen(meshCode) {
+  let hyphenMeshCode = "";
+  // 文字列内の文字を順に処理
+  for (let i = 0; i < meshCode.length; i++) {
+    if (i === 4 || i === 6) {
+      // 5桁目、7桁目の追加前にハイフンを付与
+      hyphenMeshCode += "-";
+    }
+    // 文字を追加
+    hyphenMeshCode += meshCode.charAt(i);
+  }
+  return hyphenMeshCode;
 }

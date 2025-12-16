@@ -1,4 +1,4 @@
-import * as consts from "./meshConsts.js"
+import * as consts from "./consts.js"
 
 // function export list is at the bottom
 //This generates meshes on a leaflet map based on the Japanese mesh system
@@ -18,7 +18,7 @@ let map = null
 let canvasRenderer = null 
 let meshLayer = null
 
-let getUserSelectedMeshSize = null;
+let userSelectedMeshSize = null;
 let isMeshCodeSelected = null;
 let meshClicked = null;
 let updateMapPositionCookie = null;
@@ -27,13 +27,12 @@ let updateMapPositionCookie = null;
 // Exported Functions - see list(and export) at the bottom of this file
 //////////////////////////////////
 function initMapGenerator(   
-    _getUserSelectedMeshSize, 
     _isMeshCodeSelected,
     _meshClicked,
     _updateMapPositionCookie,
   ){
   // get updated consts data into Settings
-  getUserSelectedMeshSize = _getUserSelectedMeshSize;
+  userSelectedMeshSize = consts.DOMs.DOM_userSelected_meshSize.value;
   isMeshCodeSelected = _isMeshCodeSelected;
   meshClicked = _meshClicked;
   updateMapPositionCookie = _updateMapPositionCookie;
@@ -64,15 +63,15 @@ function initMapGenerator(
 
 // メッシュレイヤー表示
 function updateMap() {
-  if ((mapMeshSettings.searchMarker_1 == null) || (mapMeshSettings.searchMarker_2 == null)){
-    updateMap_mesh()
-  } else {
+  // 前回のメッシュ表示を削除
+  meshLayer.clearLayers();
+  if ((mapMeshSettings.searchMarker_1 != null) || (mapMeshSettings.searchMarker_2 != null)){
     updateMap_markers()
   }
+  updateMap_mesh()
 }
 
 function updateMap_markers(){
-  meshLayer.clearLayers();
   let minLat, maxLat, minLon, maxLon;
   if (mapMeshSettings.searchMarker_2._latlng.lat > mapMeshSettings.searchMarker_2._latlng.lat){
     minLat = mapMeshSettings.searchMarker_2._latlng.lat
@@ -93,9 +92,6 @@ function updateMap_markers(){
   meshLayer.addLayer(meshPolygon)
 }
 function updateMap_mesh() {
-  // 前回のメッシュ表示を削除
-  meshLayer.clearLayers();
-
   // ズームレベルから表示するメッシュサイズを取得
   const meshSize = getMeshSizeFromZoomSize();
 
@@ -293,8 +289,7 @@ function getMeshSizeFromMeshCode(meshCode) {
 // ズームレベルから表示するメッシュサイズを取得 //called from 94(setTextVisiblity), 433(setMeshLayer)
 function getMeshSizeFromZoomSize() {
   let meshSize;
-
-  const userSelected_meshSize = getUserSelectedMeshSize();
+  const userSelected_meshSize = consts.DOMs.DOM_userSelected_meshSize.value
   if (userSelected_meshSize != "auto") { 
     meshSize = userSelected_meshSize 
   }
@@ -475,7 +470,7 @@ function setMeshText(meshPolygon, mouseOnFlg) {
 //////////////////////////////////
 export { 
   initMapGenerator, 
-  updateMap as updateMapMeshes, 
+  updateMap, 
   zoomToMesh, 
   convertMeshCode_to_meshArray, 
   removeLatLonMarker, 
