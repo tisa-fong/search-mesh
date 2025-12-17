@@ -49,7 +49,8 @@ export function setLatLonSearch(latlonNum) {
         (tgtLatLonArray.length != 2) ||
         (!consts.isNumeric(tgtLatLonArray[0])) || (!consts.isNumeric(tgtLatLonArray[1]))
     ) {
-        alert("不正の緯度経度: " + latlonNum);
+        alert("不正の緯度経度: " + tgtLatLonString);
+        return;
     }
 
     const searchLatlngArray = [

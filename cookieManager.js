@@ -29,12 +29,16 @@ export function initCookies(){
         break
       case consts.DOM_IDS.select_hyphen:
         consts.DOMs.DOM_userSelected_meshTable_hyphenSelect.value = val
+        meshListTable.changeMeshHyphen(val)
         break
       default:
         if (key.startsWith(consts.DOM_IDS.meshlist_table)){
           const meshCodes = val.split(",")
           for (const code of meshCodes){
             if (code.trim() != ""){
+              // if (consts.DOMs.DOM_userSelected_meshTable_hyphenSelect.value.includes("-")){
+              //   consts.addHyphen(code)
+              // }
               meshListTable.insertMeshCodeToTable_inner(code)
             }
           }

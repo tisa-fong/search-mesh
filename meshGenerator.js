@@ -71,6 +71,7 @@ function updateMap() {
 }
 
 function updateMap_markerMesh(){
+  // If either searchMarker is not set, remove the marker layer
   if ((mapMeshSettings.searchMarker_1 == null) || (mapMeshSettings.searchMarker_2 == null)){
     if (mapMeshSettings.layerCache[searchMarker] != null){
       meshLayer.removeLayer(mapMeshSettings.layerCache[searchMarker])
@@ -94,13 +95,37 @@ function updateMap_markerMesh(){
     minLon = mapMeshSettings.searchMarker_1._latlng.lng
     maxLon = mapMeshSettings.searchMarker_2._latlng.lng
   }
-
-  const markerPolygon = createMeshRect(minLat, minLon, maxLat, maxLon)
-  setMeshStyle(markerPolygon, 2, true);
   // console.log(`${minLon},${maxLat},${maxLon},${minLat}`)
   // console.log(markerPolygon.getBounds().toBBoxString()) // minLon, maxLat, maxLon, minLat
   // console.log((`${minLon},${maxLat},${maxLon},${minLat}` == markerPolygon.getBounds().toBBoxString()))
+
+  if (mapMeshSettings.layerCache[searchMarker] != null){
+    const currentBounds = mapMeshSettings.layerCache[searchMarker].getBounds().toBBoxString()
+    const newBounds = `${minLon},${maxLat},${maxLon},${minLat}`
+    if (currentBounds == newBounds){
+      return; // mesh already added and being displayed
+    }
+    meshLayer.removeLayer(mapMeshSettings.layerCache[searchMarker])
+    mapMeshSettings.layerCache[searchMarker] = null
+  }
+
+
+  const markerPolygon = createMeshRect(minLat, minLon, maxLat, maxLon)
+  markerPolygon._meshCode = searchMarker
+  // markerPolygon.setStyle({
+  //   color: "#0004ff", // gird line color
+  //   fillColor: "#ff7700", // inner square fill color
+  //   fillOpacity: 0.2,
+  //   weight: 1,
+  // });
+  // markerPolygon.unbindTooltip(); 
+  // if (markerPolygon.getTooltip()) {
+  //   markerPolygon.unbindTooltip(); 
+  // }
+  
   meshLayer.addLayer(markerPolygon)
+  markerPolygon.bringToBack();
+
   mapMeshSettings.layerCache[searchMarker] = markerPolygon
 }
 
@@ -185,11 +210,11 @@ function updateMap_mesh() {
   // add to the meshLayer      : the remaining from meshPolygonsToDisplay
 
   let layersToRemove = []
-  // Check currently rendered polygons
   meshLayer.eachLayer(_mPolygon => {
     if (meshPolygonsToDisplay[_mPolygon._meshCode] != null){
       delete meshPolygonsToDisplay[_mPolygon._meshCode] // Already displayed, so remove from "to display" list
     } 
+    else if (_mPolygon._meshCode == searchMarker) { /*Do nothing*/ }
     else {
       layersToRemove.push(_mPolygon) // Not in current view so mark for removal
     }
@@ -282,6 +307,8 @@ function createMeshPolygon(meshSize, currMeshCode, currMeshMinLat, currMeshMinLo
   // メッシュポリゴン生成
   const meshPolygon = createMeshRect(currMeshMinLat, currMeshMinLon, currMeshMaxLat, currMeshMaxLon)
   meshPolygon._meshCode = currMeshCode; // Store meshcode on itself
+  meshPolygon._meshFillColor = null
+  meshPolygon._lineWeight = null
   
   // イベント設定
   meshPolygon.on("mouseover", function () {
@@ -421,6 +448,8 @@ function checkLatlonInside(minLat, minLon, maxLat, maxLon) {
 //--------------------------------
 // メッシュスタイル設定
 function setMeshStyle(meshPolygon, meshSize, selectedCode) {
+  if (meshPolygon._meshCode == searchMarker) { return meshPolygon; /*Do nothing*/ }
+
   const zoomSize = map.getZoom();
   let lineWeight = 2
   if (zoomSize < consts.MESH_DATA[meshSize].zoomThresholds[1]){
@@ -442,12 +471,17 @@ function setMeshStyle(meshPolygon, meshSize, selectedCode) {
       meshFillColor = consts.COLORS.MESH.partlySelected_fill;
       break;
   }
-  meshPolygon.setStyle({
-    color: consts.COLORS.MESH.gridline, // gird line color
-    fillColor: meshFillColor, // inner square fill color
-    fillOpacity: 0.2,
-    weight: lineWeight,
-  });
+
+  if ((meshPolygon._meshFillColor != meshFillColor) || (meshPolygon._lineWeight != lineWeight)){
+    meshPolygon._meshFillColor = meshFillColor
+    meshPolygon._lineWeight = lineWeight
+    meshPolygon.setStyle({
+      color: consts.COLORS.MESH.gridline, // gird line color
+      fillColor: meshFillColor, // inner square fill color
+      fillOpacity: 0.2,
+      weight: lineWeight,
+    });
+  }
   return meshPolygon;
 }
 
@@ -490,6 +524,8 @@ function setMouseOverOutStyle(layer, meshSize, isOver) {
 
 // メッシュテキスト設定
 function setMeshText(meshPolygon, mouseOnFlg) {
+  if (meshPolygon._meshCode == searchMarker) { return; /*Do nothing*/ }
+
   if (mapMeshSettings.textVisiblity){
     if (meshPolygon.getTooltip()) {
       return
