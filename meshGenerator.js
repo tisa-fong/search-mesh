@@ -24,6 +24,10 @@ let isMeshCodeSelected = null;
 let meshClicked = null;
 let updateMapPositionCookie = null;
 
+const nextFrame = () => new Promise(requestAnimationFrame);
+let currentJobId = 0;
+const FRAME_BUDGET_MS = 32; // adaptive time budget per frame: try to keep under ~32ms per frame for smooth 15fps
+
 //////////////////////////////////
 // Exported Functions - see list(and export) at the bottom of this file
 //////////////////////////////////
@@ -95,9 +99,6 @@ function updateMap_markerMesh(){
     minLon = mapMeshSettings.searchMarker_1._latlng.lng
     maxLon = mapMeshSettings.searchMarker_2._latlng.lng
   }
-  // console.log(`${minLon},${maxLat},${maxLon},${minLat}`)
-  // console.log(markerPolygon.getBounds().toBBoxString()) // minLon, maxLat, maxLon, minLat
-  // console.log((`${minLon},${maxLat},${maxLon},${minLat}` == markerPolygon.getBounds().toBBoxString()))
 
   if (mapMeshSettings.layerCache[searchMarker] != null){
     const currentBounds = mapMeshSettings.layerCache[searchMarker].getBounds().toBBoxString()
@@ -109,45 +110,45 @@ function updateMap_markerMesh(){
     mapMeshSettings.layerCache[searchMarker] = null
   }
 
-
   const markerPolygon = createMeshRect(minLat, minLon, maxLat, maxLon)
-  markerPolygon._meshCode = searchMarker
-  // markerPolygon.setStyle({
-  //   color: "#0004ff", // gird line color
-  //   fillColor: "#ff7700", // inner square fill color
-  //   fillOpacity: 0.2,
-  //   weight: 1,
-  // });
-  // markerPolygon.unbindTooltip(); 
-  // if (markerPolygon.getTooltip()) {
-  //   markerPolygon.unbindTooltip(); 
-  // }
-  
+  markerPolygon._meshCode = searchMarker  
   meshLayer.addLayer(markerPolygon)
   markerPolygon.bringToBack();
 
   mapMeshSettings.layerCache[searchMarker] = markerPolygon
 }
 
-function updateMap_mesh() {
-  // ズームレベルから表示するメッシュサイズを取得
-  const meshSize = getMeshSizeFromZoomSize();
+async function updateMap_mesh() {
+  const myJobId = ++currentJobId;          // cancellation token
 
-  // ズームレベルからメッシュ内のテキスト表示／非表示を設定
+  // ズームレベルから表示するメッシュサイズを取得 // ズームレベルからメッシュ内のテキスト表示／非表示を設定
+  const meshSize = getMeshSizeFromZoomSize();
   setMeshTextVisiblity();
 
+  let meshPolygonsToDisplay = await getMeshPolygonsToDisplay_inChunks(myJobId, meshSize)
+  if (myJobId !== currentJobId) return;
+
+  meshPolygonsToDisplay = await filterAndRemovePolygonsToDisplay_inChunks(myJobId, meshPolygonsToDisplay)
+  if (myJobId !== currentJobId) return;
+
+  await addRemainingPolygonsToDisplay_inChunks(myJobId, meshSize, meshPolygonsToDisplay)
+  if (myJobId !== currentJobId) return;
+
+  updateStylesOfExistingPolygons_inChunks(myJobId, meshSize)
+}
+//--------------------------------
+// updateMap_mesh Chunks START
+//--------------------------------
+async function getMeshPolygonsToDisplay_inChunks(myJobId, meshSize){
   // 表示中の緯度経度範囲を取得 
   const bounds = map.getBounds();
   const bound_northLat = bounds.getNorthEast().lat;
   const bound_southLat = bounds.getSouthWest().lat;
   const bound_eastLon  = bounds.getNorthEast().lng;
   const bound_westLon  = bounds.getSouthWest().lng;
-  // console.log(`${bound_northLat}, ${bound_southLat}, ${bound_eastLon}, ${bound_westLon}`)
 
-  // 南西のメッシュコードを取得
+  // 南西のメッシュコードを取得 // 南西のメッシュコードの最小緯度経度を取得
   const minMeshArray = getMeshCodeParts_fromLatLon(meshSize, bound_southLat, bound_westLon);
-
-  // 南西のメッシュコードの最小緯度経度を取得
   const [minMeshMinLat, minMeshMinLon] = getMeshMinLatlon(minMeshArray);
 
   // メッシュの一辺の緯度経度サイズ配列取得
@@ -157,19 +158,27 @@ function updateMap_mesh() {
   // 西端から東端までループ
   const meshPolygonsToDisplay = {}
   let lonCounter = 0;
-  while (true) {
-    // 現在の経度を算出 calculate the longitude
-    const currMeshMinLon = minMeshMinLon + (meshLonUnit * lonCounter);
-    const currMeshMaxLon = minMeshMinLon + (meshLonUnit * (lonCounter + 1));
-    if (currMeshMinLon > bound_eastLon) break; // finished across
+  var latCounter = 0;
+  let done = false; // for inner loop to exit out of outer loop
 
-    // 南端から北端までループ
-    var latCounter = 0;
-    while (true) {
-      // 現在の緯度を算出
+  while (!done) {
+    const frameStart = performance.now();
+    // Scan visible window and build the "to display" set in chunks
+    // Do as much work in this frame as budget allows
+    while (performance.now() - frameStart < FRAME_BUDGET_MS && !done) {
+      // 現在の経度を算出 calculate the longitude
+      const currMeshMinLon = minMeshMinLon + (meshLonUnit * lonCounter);
+      const currMeshMaxLon = currMeshMinLon + meshLonUnit;
+      if (currMeshMinLon > bound_eastLon) { done = true; break; } // finished across
+
+      // 南端から北端までループ // 現在の緯度を算出
       const currMeshMinLat = minMeshMinLat + meshLatUnit * latCounter;
-      const currMeshMaxLat = minMeshMinLat + meshLatUnit * (latCounter + 1);
-      if (currMeshMinLat > bound_northLat) break; // finished vertically
+      const currMeshMaxLat = currMeshMinLat + meshLatUnit;
+      if (currMeshMinLat > bound_northLat) {
+        lonCounter++;
+        latCounter = 0;
+        continue; // finished vertically
+      } 
 
       // 日本のメッシュチェック
       if (!checkLatlonInside(currMeshMinLat, currMeshMinLon, currMeshMaxLat, currMeshMaxLon)) { 
@@ -188,54 +197,93 @@ function updateMap_mesh() {
       ).join("");
 
       // メッシュポリゴン生成
-      let meshPolygon = null
-      if (currMeshCode in mapMeshSettings.layerCache){
-        meshPolygon = mapMeshSettings.layerCache[currMeshCode]
-      } else {
-        meshPolygon = createMeshPolygon(meshSize, currMeshCode, currMeshMinLat, currMeshMinLon, currMeshMaxLat, currMeshMaxLon)
+      let meshPolygon = mapMeshSettings.layerCache[currMeshCode];
+      if (!meshPolygon) {
+        meshPolygon = createMeshPolygon(
+          meshSize, currMeshCode,
+          currMeshMinLat, currMeshMinLon, currMeshMaxLat, currMeshMaxLon
+        );
         mapMeshSettings.layerCache[currMeshCode] = meshPolygon
       }
-      meshPolygonsToDisplay[currMeshCode] = meshPolygon
+      meshPolygonsToDisplay[currMeshCode] = meshPolygon;
       
       // カウンタを加算
       latCounter++;
     }
-    // カウンタを加算
-    lonCounter++;
+
+    // Yield to the browser for paint/input
+    await nextFrame();
+    if (myJobId !== currentJobId) return; // cancelled by a newer call
   }
 
+  return meshPolygonsToDisplay
+}
+
+async function filterAndRemovePolygonsToDisplay_inChunks(myJobId, meshPolygonsToDisplay){  
+  // Diff currently rendered vs toDisplay in chunks
   // loop thru currently rendered polygons
   // keep in the meshLayer     : the polygons in meshPolygonsToDisplay and remove from meshPolygonsToDisplay
   // remove from the meshLayer : the polygons NOT in meshPolygonsToDisplay
   // add to the meshLayer      : the remaining from meshPolygonsToDisplay
-
-  let layersToRemove = []
-  meshLayer.eachLayer(_mPolygon => {
-    if (meshPolygonsToDisplay[_mPolygon._meshCode] != null){
-      delete meshPolygonsToDisplay[_mPolygon._meshCode] // Already displayed, so remove from "to display" list
-    } 
-    else if (_mPolygon._meshCode == searchMarker) { /*Do nothing*/ }
-    else {
-      layersToRemove.push(_mPolygon) // Not in current view so mark for removal
+  const existingLayers = meshLayer.getLayers(); // array snapshot
+  let i = 0;
+  while (i < existingLayers.length) {
+    const frameStart = performance.now();
+    while (performance.now() - frameStart < FRAME_BUDGET_MS && i < existingLayers.length) {
+      const _mPolygon = existingLayers[i++];
+      if (meshPolygonsToDisplay[_mPolygon._meshCode] != null) {
+        delete meshPolygonsToDisplay[_mPolygon._meshCode]; // Already displayed: remove from "to add" set
+      }
+      else if (_mPolygon._meshCode === searchMarker) { } // keep searchMarker
+      else {
+        meshLayer.removeLayer(_mPolygon); // Not in current view: remove this layer
+      }
     }
-  });
+    await nextFrame();
+    if (myJobId !== currentJobId) return;
+  }
 
-  layersToRemove.forEach(polygon => meshLayer.removeLayer(polygon)); // remove polygons not in view
-  Object.values(meshPolygonsToDisplay).forEach(polygon => meshLayer.addLayer(polygon)); // add remaining polygons that need to be displayed
-
-  meshLayer.eachLayer(_mPolygon => {
-    // 選択したメッシュの行番号を取得
-    const selectedCode = isMeshCodeSelected(_mPolygon._meshCode);
-
-    // スタイル設定
-    setMeshStyle(_mPolygon, meshSize, selectedCode);
-
-    // テキスト表示設定
-    setMeshText(_mPolygon, false);
-  })
+  return meshPolygonsToDisplay
 }
+async function addRemainingPolygonsToDisplay_inChunks(myJobId, meshSize, meshPolygonsToDisplay){
+  // Add remaining polygons in chunks
+  const polygonsToAddList = Object.values(meshPolygonsToDisplay);
+  let idx = 0;
+  while (idx < polygonsToAddList.length) {
+    const frameStart = performance.now();
+    while (performance.now() - frameStart < FRAME_BUDGET_MS && idx < polygonsToAddList.length) {
+      const tgtPolygon = polygonsToAddList[idx++]
 
+      // 選択したメッシュの行番号を取得 // スタイル設定 // テキスト表示設定
+      const selectedCode = isMeshCodeSelected(tgtPolygon._meshCode);
+      setMeshStyle(tgtPolygon, meshSize, selectedCode);
+      setMeshText(tgtPolygon, false);
 
+      meshLayer.addLayer(tgtPolygon);
+    }
+    await nextFrame();
+    if (myJobId !== currentJobId) return;
+  }
+}
+async function updateStylesOfExistingPolygons_inChunks(myJobId, meshSize){
+  // Style & text updates in chunks
+  const layers = meshLayer.getLayers();
+  let idx = 0;
+  while (idx < layers.length) {
+    const frameStart = performance.now();
+    while (performance.now() - frameStart < FRAME_BUDGET_MS && idx < layers.length) {
+      const _mPolygon = layers[idx++];
+      const selectedCode = isMeshCodeSelected(_mPolygon._meshCode);
+      setMeshStyle(_mPolygon, meshSize, selectedCode);
+      setMeshText(_mPolygon, false);
+    }
+    await nextFrame();
+    if (myJobId !== currentJobId) return;
+  }
+}
+//--------------------------------
+// updateMap_mesh Chunks END
+//--------------------------------
 
 // メッシュへジャンプ
 function zoomToMesh(meshCode) {
