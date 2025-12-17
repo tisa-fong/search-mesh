@@ -8,11 +8,12 @@ import * as consts from "./consts.js"
 //////////////////////////////////
 const mapMeshSettings = {
   meshSize: 1,
-  meshCache: {},
+  layerCache: {},
   textVisiblity: false, // メッシュのテキスト表示
   searchMarker_1: null, // 検索時のマーカーを準備
   searchMarker_2: null, // 検索時のマーカーを準備
 }
+const searchMarker = "searchMarker"
 
 let map = null
 let canvasRenderer = null 
@@ -64,14 +65,20 @@ function initMapGenerator(
 // メッシュレイヤー表示
 function updateMap() {
   // 前回のメッシュ表示を削除
-  meshLayer.clearLayers();
-  if ((mapMeshSettings.searchMarker_1 != null) || (mapMeshSettings.searchMarker_2 != null)){
-    updateMap_markers()
-  }
+  // meshLayer.clearLayers();
+  updateMap_markerMesh()
   updateMap_mesh()
 }
 
-function updateMap_markers(){
+function updateMap_markerMesh(){
+  if ((mapMeshSettings.searchMarker_1 == null) || (mapMeshSettings.searchMarker_2 == null)){
+    if (mapMeshSettings.layerCache[searchMarker] != null){
+      meshLayer.removeLayer(mapMeshSettings.layerCache[searchMarker])
+      mapMeshSettings.layerCache[searchMarker] = null
+    }
+    return; 
+  }
+
   let minLat, maxLat, minLon, maxLon;
   if (mapMeshSettings.searchMarker_2._latlng.lat > mapMeshSettings.searchMarker_2._latlng.lat){
     minLat = mapMeshSettings.searchMarker_2._latlng.lat
@@ -88,9 +95,15 @@ function updateMap_markers(){
     maxLon = mapMeshSettings.searchMarker_2._latlng.lng
   }
 
-  const meshPolygon = createMeshRect(minLat, minLon, maxLat, maxLon)
-  meshLayer.addLayer(meshPolygon)
+  const markerPolygon = createMeshRect(minLat, minLon, maxLat, maxLon)
+  setMeshStyle(markerPolygon, 2, true);
+  // console.log(`${minLon},${maxLat},${maxLon},${minLat}`)
+  // console.log(markerPolygon.getBounds().toBBoxString()) // minLon, maxLat, maxLon, minLat
+  // console.log((`${minLon},${maxLat},${maxLon},${minLat}` == markerPolygon.getBounds().toBBoxString()))
+  meshLayer.addLayer(markerPolygon)
+  mapMeshSettings.layerCache[searchMarker] = markerPolygon
 }
+
 function updateMap_mesh() {
   // ズームレベルから表示するメッシュサイズを取得
   const meshSize = getMeshSizeFromZoomSize();
@@ -117,6 +130,7 @@ function updateMap_mesh() {
   const meshLonUnit = consts.MESH_DATA[meshSize].ratio.lon;
 
   // 西端から東端までループ
+  const meshPolygonsToDisplay = {}
   let lonCounter = 0;
   while (true) {
     // 現在の経度を算出 calculate the longitude
@@ -132,6 +146,12 @@ function updateMap_mesh() {
       const currMeshMaxLat = minMeshMinLat + meshLatUnit * (latCounter + 1);
       if (currMeshMinLat > bound_northLat) break; // finished vertically
 
+      // 日本のメッシュチェック
+      if (!checkLatlonInside(currMeshMinLat, currMeshMinLon, currMeshMaxLat, currMeshMaxLon)) { 
+        latCounter++;
+        continue;
+      }
+
       // 現在のメッシュの中央の緯度経度を算出
       const currMeshCenterLat = currMeshMinLat + (meshLatUnit / 2);
       const currMeshCenterLon = currMeshMinLon + (meshLonUnit / 2);
@@ -142,57 +162,15 @@ function updateMap_mesh() {
         currMeshCenterLon
       ).join("");
 
-      // 日本のメッシュチェック
-      if (!checkLatlonInside(currMeshMinLat, currMeshMinLon, currMeshMaxLat, currMeshMaxLon)) { 
-        latCounter++;
-        continue;
-      }
-
       // メッシュポリゴン生成
-      const meshPolygon = createMeshRect(currMeshMinLat, currMeshMinLon, currMeshMaxLat, currMeshMaxLon)
-      meshPolygon._meshCode = currMeshCode; // Store meshcode on itself
-
-      // 選択したメッシュの行番号を取得
-      const selectedCode = isMeshCodeSelected(currMeshCode);
-
-      // スタイル設定
-      setMeshStyle(meshPolygon, meshSize, selectedCode);
-
-
-      // テキスト表示設定
-      if (mapMeshSettings.textVisiblity) {
-        setMeshText(meshPolygon, false);
+      let meshPolygon = null
+      if (currMeshCode in mapMeshSettings.layerCache){
+        meshPolygon = mapMeshSettings.layerCache[currMeshCode]
+      } else {
+        meshPolygon = createMeshPolygon(meshSize, currMeshCode, currMeshMinLat, currMeshMinLon, currMeshMaxLat, currMeshMaxLon)
+        mapMeshSettings.layerCache[currMeshCode] = meshPolygon
       }
-      
-      // イベント設定
-      meshPolygon.on("mouseover", function () {
-        // スタイル設定
-        setMouseOverOutStyle(this, meshSize, true);
-        if (mapMeshSettings.textVisiblity) {
-          // テキスト表示設定
-          setMeshText(this, true);
-        }
-      });
-      meshPolygon.on("mouseout", function () {
-        // スタイル設定
-        setMouseOverOutStyle(this, meshSize, false);
-        // テキスト表示設定
-        if (mapMeshSettings.textVisiblity) {
-          // テキスト表示
-          setMeshText(this, false);
-        }
-      });
-      meshPolygon.on("click", function () {
-        meshClicked(this._meshCode)
-
-        // スタイル設定 // Check selection and set meshStyle for all polygons
-        meshLayer.eachLayer(meshPolygon => {
-          const selectedCode = isMeshCodeSelected(meshPolygon._meshCode);
-          setMeshStyle(meshPolygon, meshSize, selectedCode);
-        });
-      });
-      // メッシュをメッシュグループに追加
-      meshLayer.addLayer(meshPolygon)
+      meshPolygonsToDisplay[currMeshCode] = meshPolygon
       
       // カウンタを加算
       latCounter++;
@@ -200,7 +178,39 @@ function updateMap_mesh() {
     // カウンタを加算
     lonCounter++;
   }
+
+  // loop thru currently rendered polygons
+  // keep in the meshLayer     : the polygons in meshPolygonsToDisplay and remove from meshPolygonsToDisplay
+  // remove from the meshLayer : the polygons NOT in meshPolygonsToDisplay
+  // add to the meshLayer      : the remaining from meshPolygonsToDisplay
+
+  let layersToRemove = []
+  // Check currently rendered polygons
+  meshLayer.eachLayer(_mPolygon => {
+    if (meshPolygonsToDisplay[_mPolygon._meshCode] != null){
+      delete meshPolygonsToDisplay[_mPolygon._meshCode] // Already displayed, so remove from "to display" list
+    } 
+    else {
+      layersToRemove.push(_mPolygon) // Not in current view so mark for removal
+    }
+  });
+
+  layersToRemove.forEach(polygon => meshLayer.removeLayer(polygon)); // remove polygons not in view
+  Object.values(meshPolygonsToDisplay).forEach(polygon => meshLayer.addLayer(polygon)); // add remaining polygons that need to be displayed
+
+  meshLayer.eachLayer(_mPolygon => {
+    // 選択したメッシュの行番号を取得
+    const selectedCode = isMeshCodeSelected(_mPolygon._meshCode);
+
+    // スタイル設定
+    setMeshStyle(_mPolygon, meshSize, selectedCode);
+
+    // テキスト表示設定
+    setMeshText(_mPolygon, false);
+  })
 }
+
+
 
 // メッシュへジャンプ
 function zoomToMesh(meshCode) {
@@ -266,6 +276,41 @@ function setLatLonMarker(markerNum, searchLatlngArray, zoomSize) {
 function zoomToLatLon(lat, lon, zoom){
   map.setView([lat, lon], zoom);
   updateMapPositionCookie(lat, lon, zoom)
+}
+
+function createMeshPolygon(meshSize, currMeshCode, currMeshMinLat, currMeshMinLon, currMeshMaxLat, currMeshMaxLon){
+  // メッシュポリゴン生成
+  const meshPolygon = createMeshRect(currMeshMinLat, currMeshMinLon, currMeshMaxLat, currMeshMaxLon)
+  meshPolygon._meshCode = currMeshCode; // Store meshcode on itself
+  
+  // イベント設定
+  meshPolygon.on("mouseover", function () {
+    // スタイル設定
+    setMouseOverOutStyle(this, meshSize, true);
+    if (mapMeshSettings.textVisiblity) {
+      // テキスト表示設定
+      setMeshText(this, true);
+    }
+  });
+  meshPolygon.on("mouseout", function () {
+    // スタイル設定
+    setMouseOverOutStyle(this, meshSize, false);
+    // テキスト表示設定
+    if (mapMeshSettings.textVisiblity) {
+      // テキスト表示
+      setMeshText(this, false);
+    }
+  });
+  meshPolygon.on("click", function () {
+    meshClicked(this._meshCode)
+
+    // スタイル設定 // Check selection and set meshStyle for all polygons
+    meshLayer.eachLayer(_mPolygon => {
+      const selectedCode = isMeshCodeSelected(_mPolygon._meshCode);
+      setMeshStyle(_mPolygon, meshSize, selectedCode);
+    });
+  });
+  return meshPolygon
 }
 
 function createMeshRect(currMeshMinLat, currMeshMinLon, currMeshMaxLat, currMeshMaxLon){
@@ -445,24 +490,34 @@ function setMouseOverOutStyle(layer, meshSize, isOver) {
 
 // メッシュテキスト設定
 function setMeshText(meshPolygon, mouseOnFlg) {
-  // テキスト表示を解除 -unbinds any perment text
-  meshPolygon.unbindTooltip();
+  if (mapMeshSettings.textVisiblity){
+    if (meshPolygon.getTooltip()) {
+      return
+    }
 
-  let tipClassName;
-  switch (mouseOnFlg) {
-    case true:
-      tipClassName = "leaflet-tooltip_mouseon"; //bold text style
-      break;
-    case false:
-      tipClassName = "leaflet-tooltip_base"; //no bold text style
-      break;
+    let tipClassName;
+    switch (mouseOnFlg) {
+      case true:
+        tipClassName = "leaflet-tooltip_mouseon"; //bold text style
+        break;
+      case false:
+        tipClassName = "leaflet-tooltip_base"; //no bold text style
+        break;
+    }
+  
+    meshPolygon.bindTooltip(meshPolygon._meshCode, {
+      permanent: true,
+      direction: "center",
+      className: tipClassName,
+    });
   }
-  meshPolygon.bindTooltip(meshPolygon._meshCode, {
-    permanent: true,
-    direction: "center",
-    className: tipClassName,
-  });
-  return meshPolygon;
+  else {
+    if (meshPolygon.getTooltip()) {
+      // テキスト表示を解除 -unbinds any perment text
+      meshPolygon.unbindTooltip(); 
+      return
+    }
+  }
 }
 
 //////////////////////////////////
