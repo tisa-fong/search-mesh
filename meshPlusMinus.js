@@ -1,6 +1,8 @@
 import * as consts from "./consts.js"
 
 export function getSurroundingMeshes_set(meshCode){
+    meshCode = meshCode.replace(/-/g, "")
+
     let meshSet = new Set();
     if (meshCode.length === 4){
         meshSet = consts.set_union(meshSet, getSurroundingMeshes_1st(meshCode));
