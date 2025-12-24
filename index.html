@@ -7,13 +7,18 @@
   <body>
     <div id="text_area">
       <div class="func_wrapper">
-        <div class="func_title">メッシュコードセレクト</div>
-        <select id="select_meshlevel">
-          <option>auto</option>
-          <option>1</option>
-          <option>2</option>
-          <option>3</option>
-        </select>
+        <div class="func_title">メッシュオップション</div>
+        <div class="func_wrapper">
+          メッシュサイズ: <select id="select_meshlevel">
+            <option>auto</option>
+            <option>1</option>
+            <option>2</option>
+            <option>3</option>
+          </select>
+        </div>
+        <div class="func_wrapper">
+          メッシュグリッドライン: <input type="checkbox" id="check_gridLines">
+        </div>
       </div>
 
       <div class="func_wrapper">
@@ -100,11 +105,11 @@
       </div>
       <div class="func_wrapper">
         <div class="button_wrapper">
-          <!-- <input
+          <input
             type="button"
             id="plusMinus1Btn"
             value="±1:3次"
-          /> -->
+          />
         </div>
       </div>
     </div>

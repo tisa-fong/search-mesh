@@ -27,6 +27,11 @@ export function initCookies(){
       case consts.DOM_IDS.select_meshlevel:
         consts.DOMs.DOM_userSelected_meshSize.value = val;
         break
+      case consts.DOM_IDS.check_gridLines:
+        const bVal = (val === "true");
+        consts.DOMs.DOM_check_gridLines.checked = bVal;
+        consts.set_init_enableGridLines(bVal);
+        break
       case consts.DOM_IDS.select_hyphen:
         consts.DOMs.DOM_userSelected_meshTable_hyphenSelect.value = val
         meshListTable.changeMeshHyphen(val)

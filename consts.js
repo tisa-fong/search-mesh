@@ -1,3 +1,7 @@
+// Init variables
+export let init_enableGridLines = true
+export const set_init_enableGridLines = (val) => init_enableGridLines = val
+
 //////////////////////////////////
 // Constants
 //////////////////////////////////
@@ -13,6 +17,7 @@ export const START_DATA = {
 export const DOM_IDS = {
     STARTING_POSITION_COOKIE_NAME: "startingPosition",
     select_meshlevel: "select_meshlevel",
+    check_gridLines: "check_gridLines",
     latlng_input_1: "latlng_input_1",
     clearMarkerBtn_1: "clearMarkerBtn_1",
     zoomToPointBtn_1: "zoomToPointBtn_1",
@@ -31,6 +36,7 @@ export const DOM_IDS = {
 }
 export const DOMs = { //set in meshService
     DOM_userSelected_meshSize: null,
+    DOM_check_gridLines: null,
     DOM_latlon_input_1: null,
     DOM_clearMarkerBtn_1: null,
     DOM_zoomToPointBtn_1: null,
@@ -65,8 +71,8 @@ export const COLORS = {
 
 export const COOKIE_SETTINGS = {
     expiry: 10 * 365 * 24 * 60 * 60, // seconds, For a semi-permanant cookie (10 years)
-    meshCode_count: 4,               //each cookie has 4kb limit 4 (4 cookies mean 4*4=16kb worth of meshcodes)
-    meshCode_count_perCookie: 400    //each cookie has 4kb limit (about 440 can fit in a single cookie)
+    meshCode_count: 10,               //each cookie has 4kb limit 4 (4 cookies mean 4*4=16kb worth of meshcodes)
+    meshCode_count_perCookie: 440    //each cookie has 4kb limit (about 440 can fit in a single cookie)
 }
 
 export const MESH_DATA = {
@@ -161,4 +167,10 @@ export function addHyphen(meshCode) {
     hyphenMeshCode += meshCode.charAt(i);
   }
   return hyphenMeshCode;
+}
+
+export function set_union(setA, setB) {
+  const result = new Set(setA);
+  for (const x of setB) result.add(x);
+  return result;
 }

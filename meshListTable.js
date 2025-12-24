@@ -1,7 +1,7 @@
 import * as consts from "./consts.js"
 import * as cookieManager from "./cookieManager.js"
 import * as mapGenerator from "./meshGenerator.js"
-
+import * as meshPlusMinus from "./meshPlusMinus.js"
 
 //---------------------------------
 // テーブル操作関数 mesh Table Button Functions
@@ -78,8 +78,8 @@ export function clearTable() {
 
 // メッシュ貼り付け
 export function pasteMeshList() {
-  // 貼り付けたメッシュのうち、最初のメッシュを保持（中心へジャンプのため）
-  let pasteFirstMeshCode = null;
+  
+
   // クリップボードの値を取得
   navigator.clipboard.readText().then((clipText) => {
       // 貼り付けたテキストを¥r¥nで分割 - split based on new lines
@@ -88,41 +88,10 @@ export function pasteMeshList() {
 
       // メッシュ不正リストを作成
       const meshErrorArray = [];
-      for (let currMeshCode of splitRows){
-        if (currMeshCode == "") { continue; } // skip if empty
 
-        // ハイフンを除去
-        currMeshCode = currMeshCode.replace(/-/g, "");
-        
-        // メッシュコードに該当するもののみ追加
-        if (consts.isNumeric(currMeshCode) && 
-           (currMeshCode.length === 4 || currMeshCode.length === 6 || currMeshCode.length === 8)
-        ) {
-          // メッシュコードが正しい場合のみテーブルに追加
-          const currMeshArray = mapGenerator.convertMeshCode_to_meshArray(currMeshCode);
-          if (checkMeshCode(currMeshArray)) {
-            // メッシュコードがすでにテーブルに存在するか確認
-            const selectedCode = isMeshCodeSelected(currMeshCode);
-            if (selectedCode == consts.SELECTCODE.not_selected){ // case 0: not selected
-              // console.log(currMeshCode)
-              // 存在しない場合のみ追加
-              insertMeshCodeToTable(currMeshCode);
-              // 貼り付けた値の先頭の場合、値を保持 - the first item in the list is zoomed to at the end
-              if (pasteFirstMeshCode === null) {
-                pasteFirstMeshCode = currMeshCode;
-              }
-            }
-            else if (selectedCode == consts.SELECTCODE.partially_selected){ // case 2: partly selected
-              insertMeshCodeToTable(currMeshCode);
-              removeMeshCodeFromTable(currMeshCode)
-            }
-          } else {
-            meshErrorArray.push(currMeshCode);
-          }
-        } else {
-          meshErrorArray.push(currMeshCode);
-        }
-      }
+      // 貼り付けたメッシュのうち、最初のメッシュを保持（中心へジャンプのため）
+      const pasteFirstMeshCode = pasteMeshList_inner(splitRows, meshErrorArray)
+
       if (pasteFirstMeshCode != null) {
         // 貼り付けた先頭のメッシュを表示
         mapGenerator.zoomToMesh(pasteFirstMeshCode);
@@ -134,6 +103,45 @@ export function pasteMeshList() {
       updateSelectedMeshCounter();
     }
   );
+}
+function pasteMeshList_inner(meshList, meshErrorArray){
+  let pasteFirstMeshCode = null
+  for (let currMeshCode of meshList){
+    if (currMeshCode == "") { continue; } // skip if empty
+
+    // ハイフンを除去
+    currMeshCode = currMeshCode.replace(/-/g, "");
+    
+    // メッシュコードに該当するもののみ追加
+    if (consts.isNumeric(currMeshCode) && 
+        (currMeshCode.length === 4 || currMeshCode.length === 6 || currMeshCode.length === 8)
+    ) {
+      // メッシュコードが正しい場合のみテーブルに追加
+      const currMeshArray = mapGenerator.convertMeshCode_to_meshArray(currMeshCode);
+      if (checkMeshCode(currMeshArray)) {
+        // メッシュコードがすでにテーブルに存在するか確認
+        const selectedCode = isMeshCodeSelected(currMeshCode);
+        if (selectedCode == consts.SELECTCODE.not_selected){ // case 0: not selected
+          // console.log(currMeshCode)
+          // 存在しない場合のみ追加
+          insertMeshCodeToTable(currMeshCode);
+          // 貼り付けた値の先頭の場合、値を保持 - the first item in the list is zoomed to at the end
+          if (pasteFirstMeshCode === null) {
+            pasteFirstMeshCode = currMeshCode;
+          }
+        }
+        else if (selectedCode == consts.SELECTCODE.partially_selected){ // case 2: partly selected
+          insertMeshCodeToTable(currMeshCode);
+          removeMeshCodeFromTable(currMeshCode)
+        }
+      } else {
+        meshErrorArray.push(currMeshCode);
+      }
+    } else {
+      meshErrorArray.push(currMeshCode);
+    }
+  }
+  return pasteFirstMeshCode
 }
 
 
@@ -150,6 +158,60 @@ export function copyMeshList() {
   }
   // テキストをクリップボードへコピー
   navigator.clipboard.writeText(tableTexts);
+}
+
+export function all_plusMinus1() {
+
+  const meshSet = new Set();
+  for (const row of consts.DOMs.DOM_userSelected_meshTable.rows) {
+    const currText = row.cells[0].innerText;
+    if (currText.trim() === ""){ continue; }
+
+    const surroundingMeshes = meshPlusMinus.getSurroundingMeshes_set(currText)
+    for (const sMeshCode of surroundingMeshes){
+      meshSet.add(sMeshCode)
+    }
+  }
+
+  
+  // Collect parent meshes by length
+  const mesh1_set = new Set();
+  const mesh2_set = new Set();
+  for (const mesh of meshSet) {
+    if (mesh.length === 4) mesh1_set.add(mesh);
+    else if (mesh.length === 6) mesh2_set.add(mesh);
+  }
+
+  // get meshes to delete
+  const toDelete = new Set();
+  for (const mesh of meshSet) {
+    // If a 4-digit parent exists and this code starts with it, delete deeper code
+    for (const m1 of mesh1_set) {
+      if (mesh !== m1 && mesh.startsWith(m1)) {
+        toDelete.add(mesh);
+        break; // no need to check other parents
+      }
+    }
+    // If not already marked, check 6-digit parent
+    if (!toDelete.has(mesh)) {
+      for (const m2 of mesh2_set) {
+        if (mesh !== m2 && mesh.startsWith(m2)) {
+          toDelete.add(mesh);
+          break;
+        }
+      }
+    }
+  }
+
+  // Apply deletions
+  for (const code of toDelete) {
+    meshSet.delete(code);
+  }
+
+  // clear meshTable, then add to meshTable
+  clearTable()
+  pasteMeshList_inner(Array.from(meshSet), [])
+  updateSelectedMeshCounter();
 }
 
 

@@ -10,16 +10,17 @@ const mapMeshSettings = {
   meshSize: 1,
   layerCache: {},
   textVisiblity: false, // メッシュのテキスト表示
+  gridLines: true,
   searchMarker_1: null, // 検索時のマーカーを準備
   searchMarker_2: null, // 検索時のマーカーを準備
 }
 const searchMarker = "searchMarker"
+const lineSizes = [ 4, 3, 2, 1]
 
 let map = null
 let canvasRenderer = null 
 let meshLayer = null
 
-let userSelectedMeshSize = null;
 let isMeshCodeSelected = null;
 let meshClicked = null;
 let updateMapPositionCookie = null;
@@ -37,7 +38,7 @@ function initMapGenerator(
     _updateMapPositionCookie,
   ){
   // get updated consts data into Settings
-  userSelectedMeshSize = consts.DOMs.DOM_userSelected_meshSize.value;
+  mapMeshSettings.gridLines = consts.init_enableGridLines
   isMeshCodeSelected = _isMeshCodeSelected;
   meshClicked = _meshClicked;
   updateMapPositionCookie = _updateMapPositionCookie;
@@ -64,6 +65,11 @@ function initMapGenerator(
   });
 
   updateMap();
+}
+
+function setGridLines(enableGridLines){
+  mapMeshSettings.gridLines = enableGridLines
+  updateMap()
 }
 
 // メッシュレイヤー表示
@@ -357,6 +363,7 @@ function createMeshPolygon(meshSize, currMeshCode, currMeshMinLat, currMeshMinLo
   meshPolygon._meshCode = currMeshCode; // Store meshcode on itself
   meshPolygon._meshFillColor = null
   meshPolygon._lineWeight = null
+  meshPolygon._isMouseOver = false
   
   // イベント設定
   meshPolygon.on("mouseover", function () {
@@ -377,13 +384,15 @@ function createMeshPolygon(meshSize, currMeshCode, currMeshMinLat, currMeshMinLo
     }
   });
   meshPolygon.on("click", function () {
-    meshClicked(this._meshCode)
+    meshClicked(this._meshCode) // goes to meshListTable
 
-    // スタイル設定 // Check selection and set meshStyle for all polygons
-    meshLayer.eachLayer(_mPolygon => {
-      const selectedCode = isMeshCodeSelected(_mPolygon._meshCode);
-      setMeshStyle(_mPolygon, meshSize, selectedCode);
-    });
+    const selectedCode = isMeshCodeSelected(this._meshCode);
+    setMeshStyle(this, meshSize, selectedCode);
+    // // スタイル設定 // Check selection and set meshStyle for all polygons //why?
+    // meshLayer.eachLayer(_mPolygon => {
+    //   const selectedCode = isMeshCodeSelected(_mPolygon._meshCode);
+    //   setMeshStyle(_mPolygon, meshSize, selectedCode);
+    // });
   });
   return meshPolygon
 }
@@ -498,13 +507,20 @@ function checkLatlonInside(minLat, minLon, maxLat, maxLon) {
 function setMeshStyle(meshPolygon, meshSize, selectedCode) {
   if (meshPolygon._meshCode == searchMarker) { return meshPolygon; /*Do nothing*/ }
 
-  const zoomSize = map.getZoom();
-  let lineWeight = 2
-  if (zoomSize < consts.MESH_DATA[meshSize].zoomThresholds[1]){
-    lineWeight = 0
-  }
-  else if (zoomSize < consts.MESH_DATA[meshSize].zoomThresholds[0]){
-    lineWeight = 1
+  let lineWeight = 0
+  if (mapMeshSettings.gridLines || meshPolygon._isMouseOver){
+    if (meshPolygon._isMouseOver){
+      lineWeight = meshPolygon._lineWeight
+    } else {
+      const zoomSize = map.getZoom();
+      lineWeight = lineSizes[3] //closest zoom
+      if (zoomSize < consts.MESH_DATA[meshSize].zoomThresholds[1]){
+        lineWeight = lineSizes[3] //farthest zoom
+      }
+      else if (zoomSize < consts.MESH_DATA[meshSize].zoomThresholds[0]){
+        lineWeight = lineSizes[3] // mid zoom
+      }
+    }
   }
 
   let meshFillColor;
@@ -530,6 +546,7 @@ function setMeshStyle(meshPolygon, meshSize, selectedCode) {
       weight: lineWeight,
     });
   }
+  
   return meshPolygon;
 }
 
@@ -554,46 +571,48 @@ function setMeshTextVisiblity() {
 
 
 // メッシュにマウスオンした際のスタイルを設定
-function setMouseOverOutStyle(layer, meshSize, isOver) {
+function setMouseOverOutStyle(meshPolygon, meshSize, isOver) {
   const zoomSize = map.getZoom();
-  let lineWeight = isOver? 4: 2;
+  let lineWeight = isOver? lineSizes[0]: lineSizes[3];
   if (zoomSize < consts.MESH_DATA[meshSize].zoomThresholds[1]){
-    lineWeight = isOver? 1: 0;
+    lineWeight = isOver? lineSizes[0]: lineSizes[3];
   }
   else if (zoomSize < consts.MESH_DATA[meshSize].zoomThresholds[0]){
-    lineWeight = isOver? 2: 1;
-
+    lineWeight = isOver? lineSizes[0]: lineSizes[3];
   }
-  layer.setStyle({
+
+  if ((isOver == false) && (mapMeshSettings.gridLines == false)) { lineWeight = 0; }
+  meshPolygon.setStyle({
     weight: lineWeight,
   });
-  return layer;
+  meshPolygon._isMouseOver = isOver
+  meshPolygon._lineWeight = lineWeight
+  return meshPolygon;
 }
 
 // メッシュテキスト設定
 function setMeshText(meshPolygon, mouseOnFlg) {
   if (meshPolygon._meshCode == searchMarker) { return; /*Do nothing*/ }
-
-  if (mapMeshSettings.textVisiblity){
-    if (meshPolygon.getTooltip()) {
-      return
-    }
-
-    let tipClassName;
-    switch (mouseOnFlg) {
-      case true:
-        tipClassName = "leaflet-tooltip_mouseon"; //bold text style
-        break;
-      case false:
-        tipClassName = "leaflet-tooltip_base"; //no bold text style
-        break;
-    }
   
-    meshPolygon.bindTooltip(meshPolygon._meshCode, {
-      permanent: true,
-      direction: "center",
-      className: tipClassName,
-    });
+  if (mapMeshSettings.textVisiblity) {
+    const tt_existing = meshPolygon.getTooltip();
+
+    if (!tt_existing) {
+      meshPolygon.bindTooltip(meshPolygon._meshCode, {
+        permanent: true,
+        direction: "center",
+        className: mouseOnFlg ? "leaflet-tooltip_mouseon" : "leaflet-tooltip_base",
+      });
+      return;
+    }
+
+    // Toggle classes on the existing tooltip container
+    const tt_element = tt_existing.getElement()
+    if (!tt_element) return;
+
+    L.DomUtil.removeClass(tt_element, "leaflet-tooltip_mouseon");
+    L.DomUtil.removeClass(tt_element, "leaflet-tooltip_base");
+    L.DomUtil.addClass(tt_element, mouseOnFlg ? "leaflet-tooltip_mouseon" : "leaflet-tooltip_base");
   }
   else {
     if (meshPolygon.getTooltip()) {
@@ -609,6 +628,7 @@ function setMeshText(meshPolygon, mouseOnFlg) {
 //////////////////////////////////
 export { 
   initMapGenerator, 
+  setGridLines,
   updateMap, 
   zoomToMesh, 
   convertMeshCode_to_meshArray, 
